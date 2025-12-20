@@ -13,6 +13,8 @@ import FuelRates from "@/pages/FuelRates";
 import InterestRate from "@/pages/InterestRate";
 import AdminCharges from "@/pages/AdminCharges";
 import CostSheets from "@/pages/CostSheets";
+import CostSheetForm from "@/pages/CostSheetForm";
+import CostSheetDetail from "@/pages/CostSheetDetail";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -31,6 +33,9 @@ const App = () => (
             <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/cost-sheets" element={<CostSheets />} />
+              <Route path="/cost-sheets/new" element={<CostSheetForm />} />
+              <Route path="/cost-sheets/:id" element={<CostSheetDetail />} />
+              <Route path="/cost-sheets/:id/edit" element={<CostSheetForm />} />
               <Route path="/vehicles" element={<Vehicles />} />
               <Route path="/fuel-rates" element={<FuelRates />} />
               <Route path="/interest-rate" element={<ProtectedRoute requireAdmin><InterestRate /></ProtectedRoute>} />
