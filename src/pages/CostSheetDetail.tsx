@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { getCostSheets, setCostSheets, getVehicles, getUsers } from '@/lib/storage';
 import { formatCurrency } from '@/lib/calculations';
+import { generateCostSheetPDF } from '@/lib/pdfGenerator';
 import { 
   ArrowLeft, 
   Pencil, 
@@ -27,7 +28,8 @@ import {
   Car,
   Calendar,
   Building,
-  User
+  User,
+  Download
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -141,7 +143,16 @@ export default function CostSheetDetail() {
             </div>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {costSheet.status === 'APPROVED' && (
+            <Button 
+              variant="outline" 
+              onClick={() => generateCostSheetPDF(costSheet, vehicle, creator, approver)}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Download PDF
+            </Button>
+          )}
           {canEdit && (
             <Link to={`/cost-sheets/${id}/edit`}>
               <Button variant="outline">
