@@ -60,6 +60,14 @@ export interface EmailSettings {
   updated_at: string;
 }
 
+// Insurance Rate Types
+export interface InsuranceRate {
+  id: string;
+  insurance_rate_percent: number;
+  effective_from: string;
+  is_active: boolean;
+}
+
 // Cost Sheet Types
 export type CostSheetStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
 

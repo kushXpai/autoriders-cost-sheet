@@ -11,6 +11,7 @@ import Dashboard from "@/pages/Dashboard";
 import Vehicles from "@/pages/Vehicles";
 import FuelRates from "@/pages/FuelRates";
 import InterestRate from "@/pages/InterestRate";
+import InsuranceRate from "@/pages/InsuranceRate";
 import AdminCharges from "@/pages/AdminCharges";
 import EmailSettings from "@/pages/EmailSettings";
 import CostSheets from "@/pages/CostSheets";
@@ -40,6 +41,7 @@ const App = () => (
               <Route path="/vehicles" element={<Vehicles />} />
               <Route path="/fuel-rates" element={<FuelRates />} />
               <Route path="/interest-rate" element={<ProtectedRoute requireAdmin><InterestRate /></ProtectedRoute>} />
+              <Route path="/insurance-rate" element={<ProtectedRoute requireAdmin><InsuranceRate /></ProtectedRoute>} />
               <Route path="/admin-charges" element={<ProtectedRoute requireAdmin><AdminCharges /></ProtectedRoute>} />
               <Route path="/email-settings" element={<ProtectedRoute requireAdmin><EmailSettings /></ProtectedRoute>} />
             </Route>

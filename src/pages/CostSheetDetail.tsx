@@ -29,7 +29,8 @@ import {
   Calendar,
   Building,
   User,
-  Download
+  Download,
+  Send
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -74,9 +75,27 @@ export default function CostSheetDetail() {
   const config = statusConfig[costSheet.status];
   const StatusIcon = config.icon;
 
-  const canEdit = (costSheet.status === 'DRAFT' || costSheet.status === 'REJECTED') && 
-                  (costSheet.created_by === user?.id || isAdmin);
+  // All cost sheets can be edited (will reset to DRAFT)
+  const canEdit = costSheet.created_by === user?.id || isAdmin;
   const canApprove = isAdmin && costSheet.status === 'PENDING_APPROVAL';
+  const canSubmitForApproval = costSheet.status === 'DRAFT' && (costSheet.created_by === user?.id || isAdmin);
+
+  const handleSubmitForApproval = () => {
+    const now = new Date().toISOString();
+    const updatedSheets = costSheets.map(s => 
+      s.id === id 
+        ? { 
+            ...s, 
+            status: 'PENDING_APPROVAL' as const, 
+            submitted_at: now,
+            updated_at: now,
+          } 
+        : s
+    );
+    setCostSheets(updatedSheets);
+    toast({ title: 'Cost sheet submitted for approval' });
+    navigate('/cost-sheets');
+  };
 
   const handleApprove = () => {
     const updatedSheets = costSheets.map(s => 
@@ -160,6 +179,12 @@ export default function CostSheetDetail() {
                 Edit
               </Button>
             </Link>
+          )}
+          {canSubmitForApproval && (
+            <Button onClick={handleSubmitForApproval}>
+              <Send className="w-4 h-4 mr-2" />
+              Submit for Approval
+            </Button>
           )}
           {canApprove && (
             <>
