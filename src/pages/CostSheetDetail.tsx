@@ -166,7 +166,7 @@ export default function CostSheetDetail() {
           {costSheet.status === 'APPROVED' && (
             <Button 
               variant="outline" 
-              onClick={() => generateCostSheetPDF(costSheet, vehicle, creator, approver)}
+              onClick={() => generateCostSheetPDF(costSheet, vehicle)}
             >
               <Download className="w-4 h-4 mr-2" />
               Download PDF
