@@ -1,4 +1,4 @@
-import type { User, Vehicle, FuelRate, InterestRate, AdminCharge, CostSheet, EmailSettings } from '@/types';
+import type { User, Vehicle, FuelRate, InterestRate, AdminCharge, CostSheet, EmailSettings, InsuranceRate } from '@/types';
 
 // Storage Keys
 const STORAGE_KEYS = {
@@ -10,6 +10,7 @@ const STORAGE_KEYS = {
   COST_SHEETS: 'car_rental_cost_sheets',
   CURRENT_USER: 'car_rental_current_user',
   EMAIL_SETTINGS: 'car_rental_email_settings',
+  INSURANCE_RATES: 'car_rental_insurance_rates',
 } as const;
 
 // Generic storage functions
@@ -91,6 +92,23 @@ export function getActiveInterestRate(): number {
   return active[0]?.interest_rate_percent || 0;
 }
 
+// Insurance Rates
+export function getInsuranceRates(): InsuranceRate[] {
+  return getItem<InsuranceRate[]>(STORAGE_KEYS.INSURANCE_RATES, []);
+}
+
+export function setInsuranceRates(rates: InsuranceRate[]): void {
+  setItem(STORAGE_KEYS.INSURANCE_RATES, rates);
+}
+
+export function getActiveInsuranceRate(): number {
+  const rates = getInsuranceRates();
+  const active = rates
+    .filter(r => r.is_active)
+    .sort((a, b) => new Date(b.effective_from).getTime() - new Date(a.effective_from).getTime());
+  return active[0]?.insurance_rate_percent || 3.5; // Default 3.5% if not set
+}
+
 // Admin Charges
 export function getAdminCharges(): AdminCharge[] {
   return getItem<AdminCharge[]>(STORAGE_KEYS.ADMIN_CHARGES, []);
@@ -132,9 +150,11 @@ export function resetAllData(): void {
   localStorage.removeItem('car_rental_vehicles');
   localStorage.removeItem('car_rental_fuel_rates');
   localStorage.removeItem('car_rental_interest_rates');
+  localStorage.removeItem('car_rental_insurance_rates');
   localStorage.removeItem('car_rental_admin_charges');
   localStorage.removeItem('car_rental_cost_sheets');
   localStorage.removeItem('car_rental_current_user');
+  localStorage.removeItem('car_rental_email_settings');
 }
 
 // Initialize default data
@@ -439,6 +459,17 @@ export function initializeDefaultData(): void {
     },
   ];
   setInterestRates(defaultInterestRates);
+
+  // Default Insurance Rate
+  const defaultInsuranceRates: InsuranceRate[] = [
+    {
+      id: generateId(),
+      insurance_rate_percent: 3.5,
+      effective_from: now.split('T')[0],
+      is_active: true,
+    },
+  ];
+  setInsuranceRates(defaultInsuranceRates);
 
   // Default Admin Charge
   const defaultAdminCharges: AdminCharge[] = [

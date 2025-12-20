@@ -70,11 +70,7 @@ export default function CostSheetForm() {
       const costSheets = getCostSheets();
       const existing = costSheets.find(s => s.id === id);
       if (existing) {
-        if (existing.status === 'APPROVED') {
-          toast({ title: 'Cannot edit approved cost sheet', variant: 'destructive' });
-          navigate('/cost-sheets');
-          return;
-        }
+        // All cost sheets can be edited - will be reset to DRAFT
         setFormData({
           company_name: existing.company_name,
           vehicle_id: existing.vehicle_id,
@@ -93,7 +89,7 @@ export default function CostSheetForm() {
         });
       }
     }
-  }, [id, navigate, toast]);
+  }, [id]);
 
   // Auto-calculated fields
   const calculations = useMemo(() => calculateCostSheet(formData), [formData]);
@@ -132,6 +128,10 @@ export default function CostSheetForm() {
 
     const now = new Date().toISOString();
     const costSheets = getCostSheets();
+    const existingSheet = id ? costSheets.find(s => s.id === id) : null;
+    
+    // When editing, always reset to DRAFT first (user needs to manually submit for approval)
+    const finalStatus = isEditing ? 'DRAFT' : status;
     
     const costSheetData: CostSheet = {
       id: id || generateId(),
@@ -159,14 +159,14 @@ export default function CostSheetForm() {
       admin_charge_percent: calculations.admin_charge_percent,
       admin_charge_amount: calculations.admin_charge_amount,
       grand_total: calculations.grand_total,
-      status,
+      status: finalStatus,
       approval_remarks: '',
-      submitted_at: status === 'PENDING_APPROVAL' ? now : null,
+      submitted_at: finalStatus === 'PENDING_APPROVAL' ? now : null,
       approved_at: null,
       approved_by: null,
       pdf_url: null,
-      created_by: user?.id || '',
-      created_at: isEditing ? (costSheets.find(s => s.id === id)?.created_at || now) : now,
+      created_by: existingSheet?.created_by || user?.id || '',
+      created_at: existingSheet?.created_at || now,
       updated_at: now,
     };
 
@@ -178,9 +178,14 @@ export default function CostSheetForm() {
     }
 
     setCostSheets(updatedSheets);
-    toast({ 
-      title: status === 'DRAFT' ? 'Cost sheet saved as draft' : 'Cost sheet submitted for approval' 
-    });
+    
+    if (isEditing) {
+      toast({ title: 'Cost sheet updated and set to draft. Submit for approval when ready.' });
+    } else {
+      toast({ 
+        title: status === 'DRAFT' ? 'Cost sheet saved as draft' : 'Cost sheet submitted for approval' 
+      });
+    }
     navigate('/cost-sheets');
   };
 
@@ -513,18 +518,27 @@ export default function CostSheetForm() {
       </Card>
 
       {/* Action Buttons */}
-      <div className="flex gap-3 justify-end pb-6">
-        <Button variant="outline" onClick={() => navigate('/cost-sheets')}>
-          Cancel
-        </Button>
-        <Button variant="secondary" onClick={() => saveCostSheet('DRAFT')}>
-          <Save className="w-4 h-4 mr-2" />
-          Save as Draft
-        </Button>
-        <Button onClick={() => saveCostSheet('PENDING_APPROVAL')}>
-          <Send className="w-4 h-4 mr-2" />
-          Submit for Approval
-        </Button>
+      <div className="flex flex-col gap-3 pb-6">
+        {isEditing && (
+          <p className="text-sm text-muted-foreground text-center">
+            Editing will reset the cost sheet to Draft status. Submit for approval after saving.
+          </p>
+        )}
+        <div className="flex gap-3 justify-end">
+          <Button variant="outline" onClick={() => navigate('/cost-sheets')}>
+            Cancel
+          </Button>
+          <Button variant="secondary" onClick={() => saveCostSheet('DRAFT')}>
+            <Save className="w-4 h-4 mr-2" />
+            {isEditing ? 'Save Changes (Draft)' : 'Save as Draft'}
+          </Button>
+          {!isEditing && (
+            <Button onClick={() => saveCostSheet('PENDING_APPROVAL')}>
+              <Send className="w-4 h-4 mr-2" />
+              Submit for Approval
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

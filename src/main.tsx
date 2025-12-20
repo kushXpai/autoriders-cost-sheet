@@ -4,7 +4,7 @@ import "./index.css";
 import { resetAllData, initializeDefaultData } from "./lib/storage";
 
 // Reset and reinitialize with demo data (one-time)
-const DEMO_DATA_VERSION = 'v2';
+const DEMO_DATA_VERSION = 'v3';
 if (localStorage.getItem('demo_data_version') !== DEMO_DATA_VERSION) {
   resetAllData();
   localStorage.setItem('demo_data_version', DEMO_DATA_VERSION);
