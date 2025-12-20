@@ -1,4 +1,4 @@
-import type { User, Vehicle, FuelRate, InterestRate, AdminCharge, CostSheet } from '@/types';
+import type { User, Vehicle, FuelRate, InterestRate, AdminCharge, CostSheet, EmailSettings } from '@/types';
 
 // Storage Keys
 const STORAGE_KEYS = {
@@ -9,6 +9,7 @@ const STORAGE_KEYS = {
   ADMIN_CHARGES: 'car_rental_admin_charges',
   COST_SHEETS: 'car_rental_cost_sheets',
   CURRENT_USER: 'car_rental_current_user',
+  EMAIL_SETTINGS: 'car_rental_email_settings',
 } as const;
 
 // Generic storage functions
@@ -114,6 +115,15 @@ export function getCostSheets(): CostSheet[] {
 
 export function setCostSheets(sheets: CostSheet[]): void {
   setItem(STORAGE_KEYS.COST_SHEETS, sheets);
+}
+
+// Email Settings
+export function getEmailSettings(): EmailSettings | null {
+  return getItem<EmailSettings | null>(STORAGE_KEYS.EMAIL_SETTINGS, null);
+}
+
+export function setEmailSettings(settings: EmailSettings): void {
+  setItem(STORAGE_KEYS.EMAIL_SETTINGS, settings);
 }
 
 // Force reset all data (for demo purposes)

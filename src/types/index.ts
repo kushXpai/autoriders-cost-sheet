@@ -51,6 +51,15 @@ export interface AdminCharge {
   is_active: boolean;
 }
 
+// Email Settings Types
+export interface EmailSettings {
+  id: string;
+  manager_emails: string[];
+  ceo_email: string;
+  notifications_enabled: boolean;
+  updated_at: string;
+}
+
 // Cost Sheet Types
 export type CostSheetStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
 

@@ -12,6 +12,7 @@ import Vehicles from "@/pages/Vehicles";
 import FuelRates from "@/pages/FuelRates";
 import InterestRate from "@/pages/InterestRate";
 import AdminCharges from "@/pages/AdminCharges";
+import EmailSettings from "@/pages/EmailSettings";
 import CostSheets from "@/pages/CostSheets";
 import CostSheetForm from "@/pages/CostSheetForm";
 import CostSheetDetail from "@/pages/CostSheetDetail";
@@ -40,6 +41,7 @@ const App = () => (
               <Route path="/fuel-rates" element={<FuelRates />} />
               <Route path="/interest-rate" element={<ProtectedRoute requireAdmin><InterestRate /></ProtectedRoute>} />
               <Route path="/admin-charges" element={<ProtectedRoute requireAdmin><AdminCharges /></ProtectedRoute>} />
+              <Route path="/email-settings" element={<ProtectedRoute requireAdmin><EmailSettings /></ProtectedRoute>} />
             </Route>
             
             <Route path="*" element={<NotFound />} />
