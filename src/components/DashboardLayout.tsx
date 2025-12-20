@@ -31,6 +31,8 @@ interface NavItem {
   adminOnly?: boolean;
 }
 
+import { Mail } from 'lucide-react';
+
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
   { label: 'Cost Sheets', href: '/cost-sheets', icon: <FileText className="w-5 h-5" /> },
@@ -38,6 +40,7 @@ const navItems: NavItem[] = [
   { label: 'Fuel Rates', href: '/fuel-rates', icon: <Fuel className="w-5 h-5" /> },
   { label: 'Interest Rate', href: '/interest-rate', icon: <Percent className="w-5 h-5" />, adminOnly: true },
   { label: 'Admin Charges', href: '/admin-charges', icon: <Settings className="w-5 h-5" />, adminOnly: true },
+  { label: 'Email Settings', href: '/email-settings', icon: <Mail className="w-5 h-5" />, adminOnly: true },
 ];
 
 export default function DashboardLayout() {
