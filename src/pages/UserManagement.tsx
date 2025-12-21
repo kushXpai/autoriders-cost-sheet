@@ -34,7 +34,7 @@ import type { User, UserRole } from '@/types';
 import { Plus, Pencil, Users, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const USER_ROLES: UserRole[] = ['ADMIN', 'STAFF'];
+const USER_ROLES: UserRole[] = ['SUPERADMIN', 'ADMIN', 'STAFF'];
 
 export default function UserManagement() {
   const { user: currentUser } = useAuth();
@@ -264,7 +264,7 @@ export default function UserManagement() {
                       <TableCell className="font-medium">{user.full_name}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>
-                        <Badge variant={user.role === 'ADMIN' ? 'default' : 'outline'}>
+                        <Badge variant={user.role === 'SUPERADMIN' ? 'default' : user.role === 'ADMIN' ? 'secondary' : 'outline'}>
                           {user.role}
                         </Badge>
                       </TableCell>
