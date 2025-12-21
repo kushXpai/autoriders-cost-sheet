@@ -1,14 +1,17 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { getCostSheets, getVehicles } from '@/lib/storage';
+import { getCostSheets, getVehicles, getUsers, getActiveInterestRate, getActiveInsuranceRate, getActiveAdminChargePercent, getFuelRates } from '@/lib/storage';
 import { formatCurrency } from '@/lib/calculations';
-import { FileText, Car, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { FileText, Car, Clock, CheckCircle, XCircle, AlertCircle, Users, Percent, Shield, Settings, TrendingUp, Fuel } from 'lucide-react';
 
 export default function Dashboard() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isSuperAdmin } = useAuth();
   const costSheets = getCostSheets();
   const vehicles = getVehicles();
+  const users = getUsers();
+  const fuelRates = getFuelRates();
 
+  // Basic stats (visible to all)
   const stats = {
     total: costSheets.length,
     draft: costSheets.filter(s => s.status === 'DRAFT').length,
@@ -17,6 +20,25 @@ export default function Dashboard() {
     rejected: costSheets.filter(s => s.status === 'REJECTED').length,
     totalValue: costSheets.filter(s => s.status === 'APPROVED').reduce((sum, s) => sum + s.grand_total, 0),
     activeVehicles: vehicles.filter(v => v.is_active).length,
+  };
+
+  // Admin stats
+  const adminStats = {
+    totalVehicles: vehicles.length,
+    inactiveVehicles: vehicles.filter(v => !v.is_active).length,
+    totalUsers: users.length,
+    activeUsers: users.filter(u => u.is_active).length,
+    staffCount: users.filter(u => u.role === 'STAFF').length,
+    adminCount: users.filter(u => u.role === 'ADMIN').length,
+    superAdminCount: users.filter(u => u.role === 'SUPERADMIN').length,
+  };
+
+  // SuperAdmin stats
+  const superAdminStats = {
+    interestRate: getActiveInterestRate(),
+    insuranceRate: getActiveInsuranceRate(),
+    adminChargePercent: getActiveAdminChargePercent(),
+    fuelTypes: fuelRates.length,
   };
 
   const recentSheets = [...costSheets]
@@ -31,12 +53,17 @@ export default function Dashboard() {
           Welcome back, {user?.full_name}
         </h1>
         <p className="text-muted-foreground mt-1">
-          Here's an overview of your cost sheet management system
+          {isSuperAdmin 
+            ? "Full system overview with financial settings and approvals" 
+            : isAdmin 
+              ? "Manage vehicles, users, and cost sheets" 
+              : "Here's an overview of your cost sheet activity"}
         </p>
       </div>
 
-      {/* Stats Grid */}
+      {/* Stats Grid - Role Based */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {/* Basic Stats - All Roles */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -62,7 +89,7 @@ export default function Dashboard() {
           <CardContent>
             <div className="text-2xl font-bold text-warning">{stats.pending}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              Awaiting review
+              {isSuperAdmin ? "Awaiting your review" : "Awaiting approval"}
             </p>
           </CardContent>
         </Card>
@@ -97,6 +124,136 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Admin Stats - Admin & SuperAdmin only */}
+      {isAdmin && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Vehicle Fleet
+              </CardTitle>
+              <Car className="w-4 h-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{adminStats.totalVehicles}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {adminStats.inactiveVehicles} inactive
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                System Users
+              </CardTitle>
+              <Users className="w-4 h-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{adminStats.totalUsers}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {adminStats.activeUsers} active
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Staff Members
+              </CardTitle>
+              <Users className="w-4 h-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{adminStats.staffCount}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {adminStats.adminCount} admins, {adminStats.superAdminCount} super
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Rejected Sheets
+              </CardTitle>
+              <XCircle className="w-4 h-4 text-destructive" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-destructive">{stats.rejected}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Needs revision
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* SuperAdmin Stats - Financial Settings */}
+      {isSuperAdmin && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card className="border-warning/30 bg-warning/5">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Interest Rate
+              </CardTitle>
+              <TrendingUp className="w-4 h-4 text-warning" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{superAdminStats.interestRate}%</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Active rate
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-warning/30 bg-warning/5">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Insurance Rate
+              </CardTitle>
+              <Shield className="w-4 h-4 text-warning" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{superAdminStats.insuranceRate}%</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Active rate
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-warning/30 bg-warning/5">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Admin Charge
+              </CardTitle>
+              <Settings className="w-4 h-4 text-warning" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{superAdminStats.adminChargePercent}%</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Active charge
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-warning/30 bg-warning/5">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Fuel Types
+              </CardTitle>
+              <Fuel className="w-4 h-4 text-warning" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{superAdminStats.fuelTypes}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Configured rates
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Recent Activity */}
       <div className="grid gap-6 lg:grid-cols-2">
