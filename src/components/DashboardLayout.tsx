@@ -15,6 +15,8 @@ import {
   Menu,
   X,
   ChevronDown,
+  Mail,
+  Shield,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -29,25 +31,24 @@ interface NavItem {
   href: string;
   icon: React.ReactNode;
   adminOnly?: boolean;
+  superAdminOnly?: boolean;
 }
-
-import { Mail, Shield } from 'lucide-react';
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
   { label: 'Cost Sheets', href: '/cost-sheets', icon: <FileText className="w-5 h-5" /> },
   { label: 'Vehicles', href: '/vehicles', icon: <Car className="w-5 h-5" /> },
   { label: 'Fuel Rates', href: '/fuel-rates', icon: <Fuel className="w-5 h-5" /> },
-  { label: 'Interest Rate', href: '/interest-rate', icon: <Percent className="w-5 h-5" />, adminOnly: true },
-  { label: 'Insurance Rate', href: '/insurance-rate', icon: <Shield className="w-5 h-5" />, adminOnly: true },
-  { label: 'Admin Charges', href: '/admin-charges', icon: <Settings className="w-5 h-5" />, adminOnly: true },
+  { label: 'Interest Rate', href: '/interest-rate', icon: <Percent className="w-5 h-5" />, superAdminOnly: true },
+  { label: 'Insurance Rate', href: '/insurance-rate', icon: <Shield className="w-5 h-5" />, superAdminOnly: true },
+  { label: 'Admin Charges', href: '/admin-charges', icon: <Settings className="w-5 h-5" />, superAdminOnly: true },
   { label: 'Email Settings', href: '/email-settings', icon: <Mail className="w-5 h-5" />, adminOnly: true },
   { label: 'User Management', href: '/users', icon: <Users className="w-5 h-5" />, adminOnly: true },
 ];
 
 export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, isSuperAdmin } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -56,7 +57,19 @@ export default function DashboardLayout() {
     navigate('/login');
   };
 
-  const filteredNavItems = navItems.filter(item => !item.adminOnly || isAdmin);
+  const filteredNavItems = navItems.filter(item => {
+    if (item.superAdminOnly) return isSuperAdmin;
+    if (item.adminOnly) return isAdmin;
+    return true;
+  });
+
+  const getRoleBadgeColor = (role?: string) => {
+    switch (role) {
+      case 'SUPERADMIN': return 'text-amber-500';
+      case 'ADMIN': return 'text-primary';
+      default: return 'text-sidebar-foreground/60';
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -124,7 +137,7 @@ export default function DashboardLayout() {
               <p className="text-sm font-medium text-sidebar-foreground truncate">
                 {user?.full_name}
               </p>
-              <p className="text-xs text-sidebar-foreground/60 truncate">
+              <p className={cn("text-xs truncate", getRoleBadgeColor(user?.role))}>
                 {user?.role}
               </p>
             </div>
@@ -160,6 +173,9 @@ export default function DashboardLayout() {
               <div className="px-2 py-1.5">
                 <p className="text-sm font-medium">{user?.full_name}</p>
                 <p className="text-xs text-muted-foreground">{user?.email}</p>
+                <p className={cn("text-xs font-medium mt-0.5", getRoleBadgeColor(user?.role))}>
+                  {user?.role}
+                </p>
               </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">

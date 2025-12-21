@@ -41,9 +41,9 @@ const App = () => (
               <Route path="/cost-sheets/:id/edit" element={<CostSheetForm />} />
               <Route path="/vehicles" element={<Vehicles />} />
               <Route path="/fuel-rates" element={<FuelRates />} />
-              <Route path="/interest-rate" element={<ProtectedRoute requireAdmin><InterestRate /></ProtectedRoute>} />
-              <Route path="/insurance-rate" element={<ProtectedRoute requireAdmin><InsuranceRate /></ProtectedRoute>} />
-              <Route path="/admin-charges" element={<ProtectedRoute requireAdmin><AdminCharges /></ProtectedRoute>} />
+              <Route path="/interest-rate" element={<ProtectedRoute requireSuperAdmin><InterestRate /></ProtectedRoute>} />
+              <Route path="/insurance-rate" element={<ProtectedRoute requireSuperAdmin><InsuranceRate /></ProtectedRoute>} />
+              <Route path="/admin-charges" element={<ProtectedRoute requireSuperAdmin><AdminCharges /></ProtectedRoute>} />
               <Route path="/email-settings" element={<ProtectedRoute requireAdmin><EmailSettings /></ProtectedRoute>} />
               <Route path="/users" element={<ProtectedRoute requireAdmin><UserManagement /></ProtectedRoute>} />
             </Route>

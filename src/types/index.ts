@@ -1,5 +1,5 @@
 // User Types
-export type UserRole = 'ADMIN' | 'STAFF';
+export type UserRole = 'SUPERADMIN' | 'ADMIN' | 'STAFF';
 
 export interface User {
   id: string;
@@ -144,5 +144,6 @@ export interface AuthContextType {
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   isAdmin: boolean;
+  isSuperAdmin: boolean;
   isAuthenticated: boolean;
 }

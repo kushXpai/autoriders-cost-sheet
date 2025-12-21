@@ -169,6 +169,16 @@ export function initializeDefaultData(): void {
   const defaultUsers: User[] = [
     {
       id: generateId(),
+      full_name: 'Super Admin',
+      email: 'superadmin@carrental.com',
+      password: 'super123',
+      role: 'SUPERADMIN',
+      is_active: true,
+      created_at: now,
+      updated_at: now,
+    },
+    {
+      id: generateId(),
       full_name: 'Admin User',
       email: 'admin@carrental.com',
       password: 'admin123',

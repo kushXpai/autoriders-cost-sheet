@@ -37,7 +37,7 @@ import { useToast } from '@/hooks/use-toast';
 export default function CostSheetDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isSuperAdmin } = useAuth();
   const { toast } = useToast();
   
   const costSheets = getCostSheets();
@@ -77,7 +77,7 @@ export default function CostSheetDetail() {
 
   // All cost sheets can be edited (will reset to DRAFT)
   const canEdit = costSheet.created_by === user?.id || isAdmin;
-  const canApprove = isAdmin && costSheet.status === 'PENDING_APPROVAL';
+  const canApprove = isSuperAdmin && costSheet.status === 'PENDING_APPROVAL';
   const canSubmitForApproval = costSheet.status === 'DRAFT' && (costSheet.created_by === user?.id || isAdmin);
 
   const handleSubmitForApproval = () => {
