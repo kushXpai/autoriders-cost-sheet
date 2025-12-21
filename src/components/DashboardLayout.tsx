@@ -42,6 +42,7 @@ const navItems: NavItem[] = [
   { label: 'Insurance Rate', href: '/insurance-rate', icon: <Shield className="w-5 h-5" />, adminOnly: true },
   { label: 'Admin Charges', href: '/admin-charges', icon: <Settings className="w-5 h-5" />, adminOnly: true },
   { label: 'Email Settings', href: '/email-settings', icon: <Mail className="w-5 h-5" />, adminOnly: true },
+  { label: 'User Management', href: '/users', icon: <Users className="w-5 h-5" />, adminOnly: true },
 ];
 
 export default function DashboardLayout() {
