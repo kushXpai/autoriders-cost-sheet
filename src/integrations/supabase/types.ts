@@ -132,6 +132,7 @@ export type Database = {
       }
       fuel_rates: {
         Row: {
+          city: string
           created_at: string | null
           effective_date: string
           fuel_type: string
@@ -139,6 +140,7 @@ export type Database = {
           rate: number
         }
         Insert: {
+          city: string
           created_at?: string | null
           effective_date: string
           fuel_type: string
@@ -146,6 +148,7 @@ export type Database = {
           rate: number
         }
         Update: {
+          city?: string
           created_at?: string | null
           effective_date?: string
           fuel_type?: string
