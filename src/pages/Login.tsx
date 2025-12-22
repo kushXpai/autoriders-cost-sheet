@@ -70,11 +70,13 @@ export default function Login() {
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
+                  name="email"
                   type="email"
                   placeholder="admin@carrental.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  autoComplete="email"
                   className="h-11"
                 />
               </div>
@@ -84,11 +86,13 @@ export default function Login() {
                 <div className="relative">
                   <Input
                     id="password"
+                    name="password"
                     type={showPassword ? 'text' : 'password'}
                     placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
+                    autoComplete="current-password"
                     className="h-11 pr-10"
                   />
                   <button
