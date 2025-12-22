@@ -110,24 +110,6 @@ export default function Login() {
               </Button>
             </form>
 
-            {/* Demo Credentials */}
-            <div className="mt-6 pt-4 border-t border-border">
-              <p className="text-sm text-muted-foreground text-center mb-3">
-                Demo Credentials
-              </p>
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-3 rounded-lg bg-muted">
-                  <p className="font-medium text-foreground mb-1">Admin</p>
-                  <p className="text-muted-foreground">admin@carrental.com</p>
-                  <p className="text-muted-foreground">admin123</p>
-                </div>
-                <div className="p-3 rounded-lg bg-muted">
-                  <p className="font-medium text-foreground mb-1">Staff</p>
-                  <p className="text-muted-foreground">staff@carrental.com</p>
-                  <p className="text-muted-foreground">staff123</p>
-                </div>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>
