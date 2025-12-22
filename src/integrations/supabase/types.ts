@@ -14,16 +14,275 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      admin_charges: {
+        Row: {
+          charge_percent: number
+          created_at: string | null
+          effective_date: string
+          id: string
+          is_active: boolean | null
+        }
+        Insert: {
+          charge_percent: number
+          created_at?: string | null
+          effective_date: string
+          id?: string
+          is_active?: boolean | null
+        }
+        Update: {
+          charge_percent?: number
+          created_at?: string | null
+          effective_date?: string
+          id?: string
+          is_active?: boolean | null
+        }
+        Relationships: []
+      }
+      cost_sheets: {
+        Row: {
+          admin_charge_amount: number
+          admin_charge_percent: number
+          approved_by: string | null
+          created_at: string | null
+          created_by: string | null
+          customer_email: string
+          customer_name: string
+          customer_phone: string
+          driver_allowance: number
+          driver_salary: number
+          emi_amount: number
+          ex_showroom_price: number
+          fuel_cost: number
+          grand_total: number
+          id: string
+          insurance_amount: number
+          running_kms: number
+          status: string | null
+          subtotal_a: number
+          subtotal_b: number
+          tenure_months: number
+          total_driver_cost: number
+          updated_at: string | null
+          vehicle_id: string | null
+          vehicle_model: string
+        }
+        Insert: {
+          admin_charge_amount: number
+          admin_charge_percent: number
+          approved_by?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          customer_email: string
+          customer_name: string
+          customer_phone: string
+          driver_allowance: number
+          driver_salary: number
+          emi_amount: number
+          ex_showroom_price: number
+          fuel_cost: number
+          grand_total: number
+          id?: string
+          insurance_amount: number
+          running_kms: number
+          status?: string | null
+          subtotal_a: number
+          subtotal_b: number
+          tenure_months: number
+          total_driver_cost: number
+          updated_at?: string | null
+          vehicle_id?: string | null
+          vehicle_model: string
+        }
+        Update: {
+          admin_charge_amount?: number
+          admin_charge_percent?: number
+          approved_by?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          customer_email?: string
+          customer_name?: string
+          customer_phone?: string
+          driver_allowance?: number
+          driver_salary?: number
+          emi_amount?: number
+          ex_showroom_price?: number
+          fuel_cost?: number
+          grand_total?: number
+          id?: string
+          insurance_amount?: number
+          running_kms?: number
+          status?: string | null
+          subtotal_a?: number
+          subtotal_b?: number
+          tenure_months?: number
+          total_driver_cost?: number
+          updated_at?: string | null
+          vehicle_id?: string | null
+          vehicle_model?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cost_sheets_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fuel_rates: {
+        Row: {
+          created_at: string | null
+          effective_date: string
+          fuel_type: string
+          id: string
+          rate: number
+        }
+        Insert: {
+          created_at?: string | null
+          effective_date: string
+          fuel_type: string
+          id?: string
+          rate: number
+        }
+        Update: {
+          created_at?: string | null
+          effective_date?: string
+          fuel_type?: string
+          id?: string
+          rate?: number
+        }
+        Relationships: []
+      }
+      insurance_rates: {
+        Row: {
+          created_at: string | null
+          effective_date: string
+          id: string
+          is_active: boolean | null
+          rate: number
+        }
+        Insert: {
+          created_at?: string | null
+          effective_date: string
+          id?: string
+          is_active?: boolean | null
+          rate: number
+        }
+        Update: {
+          created_at?: string | null
+          effective_date?: string
+          id?: string
+          is_active?: boolean | null
+          rate?: number
+        }
+        Relationships: []
+      }
+      interest_rates: {
+        Row: {
+          created_at: string | null
+          effective_date: string
+          id: string
+          is_active: boolean | null
+          rate: number
+        }
+        Insert: {
+          created_at?: string | null
+          effective_date: string
+          id?: string
+          is_active?: boolean | null
+          rate: number
+        }
+        Update: {
+          created_at?: string | null
+          effective_date?: string
+          id?: string
+          is_active?: boolean | null
+          rate?: number
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string | null
+          email: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          id: string
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      vehicles: {
+        Row: {
+          created_at: string | null
+          ex_showroom_price: number
+          fuel_type: string
+          id: string
+          mileage: number
+          model: string
+        }
+        Insert: {
+          created_at?: string | null
+          ex_showroom_price: number
+          fuel_type: string
+          id?: string
+          mileage: number
+          model: string
+        }
+        Update: {
+          created_at?: string | null
+          ex_showroom_price?: number
+          fuel_type?: string
+          id?: string
+          mileage?: number
+          model?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "superadmin" | "admin" | "staff"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +409,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["superadmin", "admin", "staff"],
+    },
   },
 } as const
