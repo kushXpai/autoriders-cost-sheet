@@ -26,10 +26,14 @@ export interface Vehicle {
   created_at: string;
 }
 
+// City Types
+export type City = 'Mumbai' | 'Delhi' | 'Ahmedabad' | 'Chennai' | 'Bangalore' | 'Hyderabad' | 'Vadodara' | 'Kolkata' | 'Gurugram' | 'Pune';
+
 // Fuel Rate Types
 export interface FuelRate {
   id: string;
   fuel_type: Exclude<FuelType, 'HYBRID'>;
+  city: City;
   rate_per_unit: number;
   effective_date: string;
   created_at: string;

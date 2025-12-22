@@ -438,6 +438,7 @@ export function initializeDefaultData(): void {
     {
       id: generateId(),
       fuel_type: 'PETROL',
+      city: 'Mumbai',
       rate_per_unit: 104.21,
       effective_date: now.split('T')[0],
       created_at: now,
@@ -445,6 +446,7 @@ export function initializeDefaultData(): void {
     {
       id: generateId(),
       fuel_type: 'DIESEL',
+      city: 'Mumbai',
       rate_per_unit: 89.62,
       effective_date: now.split('T')[0],
       created_at: now,
@@ -452,6 +454,7 @@ export function initializeDefaultData(): void {
     {
       id: generateId(),
       fuel_type: 'EV',
+      city: 'Mumbai',
       rate_per_unit: 8.50,
       effective_date: now.split('T')[0],
       created_at: now,
