@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
@@ -15,40 +15,79 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { getCostSheets, setCostSheets, getVehicles, getUsers } from '@/lib/storage';
+import { supabase } from '../supabase/client';
 import { formatCurrency } from '@/lib/calculations';
 import { generateCostSheetPDF } from '@/lib/pdfGenerator';
 import { 
-  ArrowLeft, 
-  Pencil, 
-  CheckCircle, 
-  XCircle, 
-  Clock, 
-  FileText,
-  Car,
-  Calendar,
-  Building,
-  User,
-  Download,
-  Send
+  ArrowLeft, Pencil, CheckCircle, XCircle, Clock, FileText,
+  Car, Calendar, Building, User, Download, Send
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+
 
 export default function CostSheetDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user, isAdmin, isSuperAdmin } = useAuth();
   const { toast } = useToast();
-  
-  const costSheets = getCostSheets();
-  const vehicles = getVehicles();
-  const users = getUsers();
-  const costSheet = costSheets.find(s => s.id === id);
-  
+
+
+  const [costSheet, setCostSheet] = useState<any>(null);
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false);
   const [remarks, setRemarks] = useState('');
 
+
+  // Fetch cost sheet, vehicles and users from Supabase
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const { data: costSheetData, error: costSheetError } = await supabase
+          .from('cost_sheets')
+          .select('*')
+          .eq('id', id)
+          .single();
+
+
+        if (costSheetError) throw costSheetError;
+        setCostSheet(costSheetData);
+
+
+        const { data: vehiclesData, error: vehiclesError } = await supabase
+          .from('vehicles')
+          .select('*');
+
+
+        if (vehiclesError) throw vehiclesError;
+        setVehicles(vehiclesData || []);
+
+
+        const { data: usersData, error: usersError } = await supabase
+          .from('users')
+          .select('*');
+
+
+        if (usersError) throw usersError;
+        setUsers(usersData || []);
+
+
+      } catch (err: any) {
+        toast({ title: err.message || 'Failed to fetch data', variant: 'destructive' });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+
+    fetchData();
+  }, [id]);
+
+
+  if (loading) return <p className="text-center py-12">Loading...</p>;
   if (!costSheet) {
     return (
       <div className="text-center py-12">
@@ -61,9 +100,11 @@ export default function CostSheetDetail() {
     );
   }
 
+
   const vehicle = vehicles.find(v => v.id === costSheet.vehicle_id);
   const creator = users.find(u => u.id === costSheet.created_by);
   const approver = costSheet.approved_by ? users.find(u => u.id === costSheet.approved_by) : null;
+
 
   const statusConfig = {
     DRAFT: { label: 'Draft', className: 'bg-muted text-muted-foreground', icon: FileText },
@@ -72,72 +113,45 @@ export default function CostSheetDetail() {
     REJECTED: { label: 'Rejected', className: 'bg-destructive/10 text-destructive', icon: XCircle },
   };
 
+
   const config = statusConfig[costSheet.status];
   const StatusIcon = config.icon;
 
-  // All cost sheets can be edited (will reset to DRAFT)
+
   const canEdit = costSheet.created_by === user?.id || isAdmin;
   const canApprove = isSuperAdmin && costSheet.status === 'PENDING_APPROVAL';
   const canSubmitForApproval = costSheet.status === 'DRAFT' && (costSheet.created_by === user?.id || isAdmin);
 
-  const handleSubmitForApproval = () => {
-    const now = new Date().toISOString();
-    const updatedSheets = costSheets.map(s => 
-      s.id === id 
-        ? { 
-            ...s, 
-            status: 'PENDING_APPROVAL' as const, 
-            submitted_at: now,
-            updated_at: now,
-          } 
-        : s
-    );
-    setCostSheets(updatedSheets);
-    toast({ title: 'Cost sheet submitted for approval' });
-    navigate('/cost-sheets');
-  };
 
-  const handleApprove = () => {
-    const updatedSheets = costSheets.map(s => 
-      s.id === id 
-        ? { 
-            ...s, 
-            status: 'APPROVED' as const, 
-            approved_at: new Date().toISOString(),
-            approved_by: user?.id || '',
-            approval_remarks: remarks,
-            updated_at: new Date().toISOString(),
-          } 
-        : s
-    );
-    setCostSheets(updatedSheets);
-    setApprovalDialogOpen(false);
-    toast({ title: 'Cost sheet approved successfully' });
-    navigate('/cost-sheets');
-  };
-
-  const handleReject = () => {
-    if (!remarks.trim()) {
-      toast({ title: 'Please provide rejection remarks', variant: 'destructive' });
+  const updateStatus = async (status: 'APPROVED' | 'REJECTED' | 'PENDING_APPROVAL') => {
+    if (status === 'REJECTED' && !remarks.trim()) {
+      toast({ title: 'Please provide remarks', variant: 'destructive' });
       return;
     }
-    const updatedSheets = costSheets.map(s => 
-      s.id === id 
-        ? { 
-            ...s, 
-            status: 'REJECTED' as const, 
-            approved_at: new Date().toISOString(),
-            approved_by: user?.id || '',
-            approval_remarks: remarks,
-            updated_at: new Date().toISOString(),
-          } 
-        : s
-    );
-    setCostSheets(updatedSheets);
-    setRejectionDialogOpen(false);
-    toast({ title: 'Cost sheet rejected' });
-    navigate('/cost-sheets');
+
+
+    const updates: any = { status, updated_at: new Date().toISOString() };
+    if (status === 'APPROVED' || status === 'REJECTED') {
+      updates.approved_at = new Date().toISOString();
+      updates.approved_by = user?.id;
+      updates.approval_remarks = remarks;
+    }
+    if (status === 'PENDING_APPROVAL') {
+      updates.submitted_at = new Date().toISOString();
+    }
+
+
+    const { error } = await supabase.from('cost_sheets').update(updates).eq('id', id);
+
+
+    if (error) {
+      toast({ title: 'Failed to update status', variant: 'destructive' });
+    } else {
+      toast({ title: `Cost sheet ${status.toLowerCase()} successfully` });
+      navigate('/cost-sheets');
+    }
   };
+
 
   return (
     <div className="space-y-6 animate-fade-in max-w-4xl mx-auto">
@@ -148,9 +162,7 @@ export default function CostSheetDetail() {
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
-            <h1 className="text-2xl font-display font-bold text-foreground">
-              {costSheet.company_name}
-            </h1>
+            <h1 className="text-2xl font-display font-bold text-foreground">{costSheet.company_name}</h1>
             <div className="flex items-center gap-3 mt-1">
               <Badge className={config.className}>
                 <StatusIcon className="w-3 h-3 mr-1" />
@@ -162,44 +174,39 @@ export default function CostSheetDetail() {
             </div>
           </div>
         </div>
+
+
         <div className="flex gap-2 flex-wrap">
           {costSheet.status === 'APPROVED' && (
-            <Button 
-              variant="outline" 
-              onClick={() => generateCostSheetPDF(costSheet, vehicle)}
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Download PDF
+            <Button variant="outline" onClick={() => generateCostSheetPDF(costSheet, vehicle)}>
+              <Download className="w-4 h-4 mr-2" /> Download PDF
             </Button>
           )}
           {canEdit && (
             <Link to={`/cost-sheets/${id}/edit`}>
               <Button variant="outline">
-                <Pencil className="w-4 h-4 mr-2" />
-                Edit
+                <Pencil className="w-4 h-4 mr-2" /> Edit
               </Button>
             </Link>
           )}
           {canSubmitForApproval && (
-            <Button onClick={handleSubmitForApproval}>
-              <Send className="w-4 h-4 mr-2" />
-              Submit for Approval
+            <Button onClick={() => updateStatus('PENDING_APPROVAL')}>
+              <Send className="w-4 h-4 mr-2" /> Submit for Approval
             </Button>
           )}
           {canApprove && (
             <>
               <Button variant="outline" onClick={() => setRejectionDialogOpen(true)}>
-                <XCircle className="w-4 h-4 mr-2" />
-                Reject
+                <XCircle className="w-4 h-4 mr-2" /> Reject
               </Button>
               <Button onClick={() => setApprovalDialogOpen(true)}>
-                <CheckCircle className="w-4 h-4 mr-2" />
-                Approve
+                <CheckCircle className="w-4 h-4 mr-2" /> Approve
               </Button>
             </>
           )}
         </div>
       </div>
+
 
       {/* Metadata Cards */}
       <div className="grid gap-4 md:grid-cols-4">
@@ -249,7 +256,8 @@ export default function CostSheetDetail() {
         </Card>
       </div>
 
-      {/* Section A */}
+
+      {/* Section A - Vehicle Finance & Registration */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
@@ -258,8 +266,11 @@ export default function CostSheetDetail() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-1">
             <DetailRow label="Vehicle Cost" value={formatCurrency(costSheet.vehicle_cost)} />
+            <DetailRow label="Down Payment %" value={`${costSheet.down_payment_percent.toFixed(1)}%`} />
+            <DetailRow label="Down Payment Amount" value={formatCurrency(costSheet.down_payment_amount)} />
+            <DetailRow label="Loan Amount" value={formatCurrency(costSheet.loan_amount)} />
             <DetailRow label="EMI Amount (Monthly)" value={formatCurrency(costSheet.emi_amount)} />
             <DetailRow label="Insurance Amount" value={formatCurrency(costSheet.insurance_amount)} />
             <DetailRow label="Registration Charges" value={formatCurrency(costSheet.registration_charges)} />
@@ -272,38 +283,68 @@ export default function CostSheetDetail() {
         </CardContent>
       </Card>
 
-      {/* Section B */}
+
+      {/* Section B - Operational Costs */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
-            <span className="bg-primary text-primary-foreground px-2 py-0.5 rounded text-sm">B</span>
+            <span className="bg-secondary text-secondary-foreground px-2 py-0.5 rounded text-sm">B</span>
             Operational Costs
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-3 md:grid-cols-2">
-            <DetailRow label="Daily KM" value={`${costSheet.daily_km} km`} />
-            <DetailRow label="Daily Hours" value={`${costSheet.daily_hours} hrs`} />
-            <DetailRow label="Monthly Fuel Cost" value={formatCurrency(costSheet.fuel_cost)} />
-            <DetailRow label="Drivers Count" value={costSheet.drivers_count.toString()} />
-            <DetailRow label="Salary per Driver" value={formatCurrency(costSheet.driver_salary_per_driver)} />
-            <DetailRow label="Total Driver Cost" value={formatCurrency(costSheet.total_driver_cost)} />
-            <DetailRow label="Parking Charges" value={formatCurrency(costSheet.parking_charges)} />
-            <DetailRow label="Maintenance Cost" value={formatCurrency(costSheet.maintenance_cost)} />
-            <DetailRow label="Supervisor Cost" value={formatCurrency(costSheet.supervisor_cost)} />
-            <DetailRow label="GPS & Camera Cost" value={formatCurrency(costSheet.gps_camera_cost)} />
-            <DetailRow label="Permit Cost" value={formatCurrency(costSheet.permit_cost)} />
+          <div className="space-y-6">
+            {/* Usage & Fuel */}
+            <div>
+              <h4 className="font-medium mb-3 text-muted-foreground">Usage & Fuel</h4>
+              <div className="grid gap-3 md:grid-cols-1">
+                <DetailRow label="Monthly KM" value={`${costSheet.monthly_km} km`} />
+                <DetailRow label="Daily Hours" value={`${costSheet.daily_hours} hrs`} />
+                <DetailRow label="Monthly Fuel Cost" value={formatCurrency(costSheet.fuel_cost)} />
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Driver Costs */}
+            <div>
+              <h4 className="font-medium mb-3 text-muted-foreground">Driver Costs</h4>
+              <div className="grid gap-3 md:grid-cols-1">
+                <DetailRow label="Drivers Count" value={costSheet.drivers_count.toString()} />
+                <DetailRow label="Salary per Driver" value={formatCurrency(costSheet.driver_salary_per_driver)} />
+                <DetailRow label="Total Driver Cost" value={formatCurrency(costSheet.total_driver_cost)} />
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Other Costs */}
+            <div>
+              <h4 className="font-medium mb-3 text-muted-foreground">Other Monthly Costs</h4>
+              <div className="grid gap-3 md:grid-cols-1">
+                <DetailRow label="Parking Charges" value={formatCurrency(costSheet.parking_charges)} />
+                <DetailRow label="Maintenance Cost" value={formatCurrency(costSheet.maintenance_cost)} />
+                <DetailRow label="Supervisor Cost" value={formatCurrency(costSheet.supervisor_cost)} />
+                <DetailRow label="GPS & Camera Cost" value={formatCurrency(costSheet.gps_camera_cost)} />
+                <DetailRow label="Permit Cost" value={formatCurrency(costSheet.permit_cost)} />
+              </div>
+            </div>
           </div>
+
           <Separator className="my-4" />
-          <div className="flex justify-between items-center p-3 bg-primary/5 rounded-lg">
+          <div className="flex justify-between items-center p-3 bg-secondary/20 rounded-lg">
             <span className="font-medium">Subtotal B</span>
-            <span className="text-xl font-bold text-primary">{formatCurrency(costSheet.subtotal_b)}</span>
+            <span className="text-xl font-bold text-secondary-foreground">{formatCurrency(costSheet.subtotal_b)}</span>
           </div>
         </CardContent>
       </Card>
 
+
       {/* Grand Total */}
       <Card className="border-primary/30">
+        <CardHeader>
+          <CardTitle className="text-lg">Summary & Admin Charges</CardTitle>
+        </CardHeader>
         <CardContent className="pt-6">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-3">
@@ -311,7 +352,7 @@ export default function CostSheetDetail() {
               <DetailRow label="Subtotal B" value={formatCurrency(costSheet.subtotal_b)} />
               <Separator />
               <DetailRow 
-                label={`Admin Charges (${costSheet.admin_charge_percent}%)`} 
+                label={`Admin Charges (${costSheet.admin_charge_percent.toFixed(1)}%)`} 
                 value={formatCurrency(costSheet.admin_charge_amount)} 
               />
             </div>
@@ -322,6 +363,7 @@ export default function CostSheetDetail() {
           </div>
         </CardContent>
       </Card>
+
 
       {/* Approval Info */}
       {(costSheet.status === 'APPROVED' || costSheet.status === 'REJECTED') && (
@@ -343,58 +385,43 @@ export default function CostSheetDetail() {
         </Card>
       )}
 
+
       {/* Approval Dialog */}
       <Dialog open={approvalDialogOpen} onOpenChange={setApprovalDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Approve Cost Sheet</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to approve this cost sheet for {costSheet.company_name}?
-            </DialogDescription>
+            <DialogDescription>Are you sure you want to approve this cost sheet?</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
             <Label>Remarks (Optional)</Label>
-            <Textarea
-              value={remarks}
-              onChange={(e) => setRemarks(e.target.value)}
-              placeholder="Add any remarks..."
-              maxLength={500}
-            />
+            <Textarea value={remarks} onChange={e => setRemarks(e.target.value)} />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setApprovalDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleApprove}>
-              <CheckCircle className="w-4 h-4 mr-2" />
-              Approve
+            <Button onClick={() => updateStatus('APPROVED')}>
+              <CheckCircle className="w-4 h-4 mr-2" /> Approve
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
 
       {/* Rejection Dialog */}
       <Dialog open={rejectionDialogOpen} onOpenChange={setRejectionDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Reject Cost Sheet</DialogTitle>
-            <DialogDescription>
-              Please provide a reason for rejection. This will be visible to the creator.
-            </DialogDescription>
+            <DialogDescription>Provide a reason for rejection</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
             <Label>Rejection Reason *</Label>
-            <Textarea
-              value={remarks}
-              onChange={(e) => setRemarks(e.target.value)}
-              placeholder="Enter reason for rejection..."
-              maxLength={500}
-              required
-            />
+            <Textarea value={remarks} onChange={e => setRemarks(e.target.value)} required />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRejectionDialogOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleReject}>
-              <XCircle className="w-4 h-4 mr-2" />
-              Reject
+            <Button variant="destructive" onClick={() => updateStatus('REJECTED')}>
+              <XCircle className="w-4 h-4 mr-2" /> Reject
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -402,6 +429,7 @@ export default function CostSheetDetail() {
     </div>
   );
 }
+
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (

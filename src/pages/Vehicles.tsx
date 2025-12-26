@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,17 +29,17 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { getVehicles, setVehicles, generateId } from '@/lib/storage';
-import type { Vehicle, FuelType } from '@/types';
 import { Plus, Pencil, Trash2, Car } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/supabase/client';
+import type { Vehicle, FuelType } from '@/types';
 
 const FUEL_TYPES: FuelType[] = ['PETROL', 'DIESEL', 'HYBRID', 'EV'];
 
 export default function Vehicles() {
   const { isAdmin } = useAuth();
   const { toast } = useToast();
-  const [vehicles, setVehiclesState] = useState<Vehicle[]>(getVehicles());
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
   const [formData, setFormData] = useState({
@@ -49,6 +49,28 @@ export default function Vehicles() {
     fuel_type: 'PETROL' as FuelType,
     mileage_km_per_unit: '',
   });
+  const [loading, setLoading] = useState(true);
+
+  const fetchVehicles = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('vehicles')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setVehicles(data || []);
+    } catch (err: any) {
+      console.error('Error fetching vehicles:', err);
+      toast({ title: 'Error fetching vehicles', description: err.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchVehicles();
+  }, []);
 
   const resetForm = () => {
     setFormData({
@@ -77,50 +99,80 @@ export default function Vehicles() {
     setDialogOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const vehicleData: Vehicle = {
-      id: editingVehicle?.id || generateId(),
-      brand_name: formData.brand_name,
-      model_name: formData.model_name,
-      variant_name: formData.variant_name,
-      fuel_type: formData.fuel_type,
-      mileage_km_per_unit: parseFloat(formData.mileage_km_per_unit) || 0,
-      is_active: editingVehicle?.is_active ?? true,
-      created_at: editingVehicle?.created_at || new Date().toISOString(),
-    };
-
-    let updatedVehicles: Vehicle[];
-    if (editingVehicle) {
-      updatedVehicles = vehicles.map(v => v.id === editingVehicle.id ? vehicleData : v);
-      toast({ title: 'Vehicle updated successfully' });
-    } else {
-      updatedVehicles = [...vehicles, vehicleData];
-      toast({ title: 'Vehicle added successfully' });
+    if (!formData.brand_name || !formData.model_name || !formData.variant_name) {
+      toast({ title: 'Please fill all required fields', variant: 'destructive' });
+      return;
     }
 
-    setVehicles(updatedVehicles);
-    setVehiclesState(updatedVehicles);
-    setDialogOpen(false);
-    resetForm();
+    try {
+      if (editingVehicle) {
+        // Update vehicle
+        const { error } = await supabase
+          .from('vehicles')
+          .update({
+            brand_name: formData.brand_name,
+            model_name: formData.model_name,
+            variant_name: formData.variant_name,
+            fuel_type: formData.fuel_type,
+            mileage_km_per_unit: parseFloat(formData.mileage_km_per_unit),
+          })
+          .eq('id', editingVehicle.id);
+        if (error) throw error;
+        toast({ title: 'Vehicle updated successfully' });
+      } else {
+        // Add new vehicle
+        const { error } = await supabase
+          .from('vehicles')
+          .insert([{
+            brand_name: formData.brand_name,
+            model_name: formData.model_name,
+            variant_name: formData.variant_name,
+            fuel_type: formData.fuel_type,
+            mileage_km_per_unit: parseFloat(formData.mileage_km_per_unit),
+          }]);
+        if (error) throw error;
+        toast({ title: 'Vehicle added successfully' });
+      }
+      fetchVehicles();
+      setDialogOpen(false);
+      resetForm();
+    } catch (err: any) {
+      console.error('Error saving vehicle:', err);
+      toast({ title: 'Error saving vehicle', description: err.message, variant: 'destructive' });
+    }
   };
 
-  const handleToggleActive = (id: string) => {
-    const updatedVehicles = vehicles.map(v =>
-      v.id === id ? { ...v, is_active: !v.is_active } : v
-    );
-    setVehicles(updatedVehicles);
-    setVehiclesState(updatedVehicles);
-    toast({ title: 'Vehicle status updated' });
+  const handleToggleActive = async (vehicle: Vehicle) => {
+    try {
+      const { error } = await supabase
+        .from('vehicles')
+        .update({ is_active: !vehicle.is_active })
+        .eq('id', vehicle.id);
+      if (error) throw error;
+      fetchVehicles();
+      toast({ title: 'Vehicle status updated' });
+    } catch (err: any) {
+      console.error('Error updating vehicle status:', err);
+      toast({ title: 'Error updating status', description: err.message, variant: 'destructive' });
+    }
   };
 
-  const handleDelete = (id: string) => {
-    const updatedVehicles = vehicles.filter(v => v.id !== id);
-    setVehicles(updatedVehicles);
-    setVehiclesState(updatedVehicles);
-    toast({ title: 'Vehicle deleted successfully' });
+  const handleDelete = async (vehicle: Vehicle) => {
+    try {
+      const { error } = await supabase.from('vehicles').delete().eq('id', vehicle.id);
+      if (error) throw error;
+      fetchVehicles();
+      toast({ title: 'Vehicle deleted successfully' });
+    } catch (err: any) {
+      console.error('Error deleting vehicle:', err);
+      toast({ title: 'Error deleting vehicle', description: err.message, variant: 'destructive' });
+    }
   };
+
+  if (loading) return <div className="text-center py-20 text-muted-foreground">Loading vehicles...</div>;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -217,9 +269,7 @@ export default function Vehicles() {
                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit">
-                  {editingVehicle ? 'Update Vehicle' : 'Add Vehicle'}
-                </Button>
+                <Button type="submit">{editingVehicle ? 'Update Vehicle' : 'Add Vehicle'}</Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -251,7 +301,7 @@ export default function Vehicles() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {vehicles.map((vehicle) => (
+                  {vehicles.map(vehicle => (
                     <TableRow key={vehicle.id}>
                       <TableCell>
                         <div>
@@ -270,34 +320,20 @@ export default function Vehicles() {
                           {vehicle.is_active ? 'Active' : 'Inactive'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleOpenDialog(vehicle)}
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          {isAdmin && (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleToggleActive(vehicle.id)}
-                              >
-                                {vehicle.is_active ? 'Deactivate' : 'Activate'}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDelete(vehicle.id)}
-                              >
-                                <Trash2 className="w-4 h-4 text-destructive" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
+                      <TableCell className="text-right flex justify-end gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(vehicle)}>
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        {isAdmin && (
+                          <>
+                            <Button variant="ghost" size="sm" onClick={() => handleToggleActive(vehicle)}>
+                              {vehicle.is_active ? 'Deactivate' : 'Activate'}
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDelete(vehicle)}>
+                              <Trash2 className="w-4 h-4 text-destructive" />
+                            </Button>
+                          </>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

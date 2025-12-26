@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,19 +22,42 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { getInterestRates, setInterestRates, generateId } from '@/lib/storage';
-import type { InterestRate } from '@/types';
 import { Plus, Percent } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/supabase/client';
+import type { InterestRate } from '@/types';
 
 export default function InterestRatePage() {
   const { toast } = useToast();
-  const [rates, setRatesState] = useState<InterestRate[]>(getInterestRates());
+  const [rates, setRates] = useState<InterestRate[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     interest_rate_percent: '',
     effective_from: new Date().toISOString().split('T')[0],
   });
+  const [loading, setLoading] = useState(true);
+
+  const fetchRates = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('interest_rates')
+        .select('*')
+        .order('effective_from', { ascending: false });
+
+      if (error) throw error;
+      setRates(data || []);
+    } catch (err: any) {
+      console.error('Error fetching rates:', err);
+      toast({ title: 'Error fetching rates', description: err.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRates();
+  }, []);
 
   const activeRate = rates.find(r => r.is_active);
 
@@ -45,36 +68,61 @@ export default function InterestRatePage() {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const rateData: InterestRate = {
-      id: generateId(),
-      interest_rate_percent: parseFloat(formData.interest_rate_percent) || 0,
-      effective_from: formData.effective_from,
-      is_active: true,
-    };
+    try {
+      // Deactivate all other rates first
+      await supabase
+        .from('interest_rates')
+        .update({ is_active: false })
+        .eq('is_active', true);
 
-    // Deactivate all other rates
-    const updatedRates = rates.map(r => ({ ...r, is_active: false }));
-    updatedRates.push(rateData);
-    
-    setInterestRates(updatedRates);
-    setRatesState(updatedRates);
-    setDialogOpen(false);
-    resetForm();
-    toast({ title: 'Interest rate added and activated' });
+      // Insert new rate
+      const { data, error } = await supabase
+        .from('interest_rates')
+        .insert([{
+          interest_rate_percent: parseFloat(formData.interest_rate_percent),
+          effective_from: formData.effective_from,
+          is_active: true,
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setRates([data, ...rates.map(r => ({ ...r, is_active: false }))]);
+      setDialogOpen(false);
+      resetForm();
+      toast({ title: 'Interest rate added and activated' });
+    } catch (err: any) {
+      console.error('Error adding rate:', err);
+      toast({ title: 'Error saving rate', description: err.message, variant: 'destructive' });
+    }
   };
 
-  const handleToggleActive = (id: string) => {
-    const updatedRates = rates.map(r => ({
-      ...r,
-      is_active: r.id === id,
-    }));
-    setInterestRates(updatedRates);
-    setRatesState(updatedRates);
-    toast({ title: 'Active interest rate updated' });
+  const handleToggleActive = async (id: string) => {
+    try {
+      // Set all to inactive
+      await supabase.from('interest_rates').update({ is_active: false }).eq('is_active', true);
+      // Activate the selected
+      const { data, error } = await supabase
+        .from('interest_rates')
+        .update({ is_active: true })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+
+      setRates(rates.map(r => ({ ...r, is_active: r.id === id })));
+      toast({ title: 'Active interest rate updated' });
+    } catch (err: any) {
+      console.error('Error updating active rate:', err);
+      toast({ title: 'Error updating rate', description: err.message, variant: 'destructive' });
+    }
   };
+
+  if (loading) return <div className="text-center py-20 text-muted-foreground">Loading interest rates...</div>;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -125,9 +173,7 @@ export default function InterestRatePage() {
               </div>
 
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                  Cancel
-                </Button>
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
                 <Button type="submit">Add Rate</Button>
               </DialogFooter>
             </form>
@@ -146,9 +192,7 @@ export default function InterestRatePage() {
         <CardContent>
           {activeRate ? (
             <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold text-primary">
-                {activeRate.interest_rate_percent}%
-              </span>
+              <span className="text-4xl font-bold text-primary">{activeRate.interest_rate_percent}%</span>
               <span className="text-muted-foreground">
                 per annum • Since {new Date(activeRate.effective_from).toLocaleDateString()}
               </span>
@@ -184,29 +228,23 @@ export default function InterestRatePage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {[...rates]
-                    .sort((a, b) => new Date(b.effective_from).getTime() - new Date(a.effective_from).getTime())
-                    .map((rate) => (
-                      <TableRow key={rate.id}>
-                        <TableCell className="font-medium text-lg">
-                          {rate.interest_rate_percent}%
-                        </TableCell>
-                        <TableCell>
-                          {new Date(rate.effective_from).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={rate.is_active ? 'default' : 'secondary'}>
-                            {rate.is_active ? 'Active' : 'Inactive'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Switch
-                            checked={rate.is_active}
-                            onCheckedChange={() => handleToggleActive(rate.id)}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                  {rates.map(rate => (
+                    <TableRow key={rate.id}>
+                      <TableCell className="font-medium text-lg">{rate.interest_rate_percent}%</TableCell>
+                      <TableCell>{new Date(rate.effective_from).toLocaleDateString()}</TableCell>
+                      <TableCell>
+                        <Badge variant={rate.is_active ? 'default' : 'secondary'}>
+                          {rate.is_active ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Switch
+                          checked={rate.is_active}
+                          onCheckedChange={() => handleToggleActive(rate.id)}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </div>

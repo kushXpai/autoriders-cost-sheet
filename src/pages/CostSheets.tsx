@@ -1,21 +1,49 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { getCostSheets, getVehicles } from '@/lib/storage';
-import { formatCurrency } from '@/lib/calculations';
 import { Plus, FileText, Clock, CheckCircle, XCircle, Eye } from 'lucide-react';
+import { supabase } from '@/supabase/client';
+import { formatCurrency } from '@/lib/calculations';
+import type { CostSheet, Vehicle } from '@/types';
 
 export default function CostSheets() {
   const { isAdmin } = useAuth();
   const [filter, setFilter] = useState<string>('ALL');
-  const costSheets = getCostSheets();
-  const vehicles = getVehicles();
+  const [costSheets, setCostSheets] = useState<CostSheet[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  const filteredSheets = filter === 'ALL' 
-    ? costSheets 
+  // Fetch cost sheets and vehicles from Supabase
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+
+      const { data: sheetsData, error: sheetsError } = await supabase
+        .from('cost_sheets')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (sheetsError) console.error('Error fetching cost sheets:', sheetsError.message);
+
+      const { data: vehiclesData, error: vehiclesError } = await supabase
+        .from('vehicles')
+        .select('*');
+
+      if (vehiclesError) console.error('Error fetching vehicles:', vehiclesError.message);
+
+      setCostSheets(sheetsData || []);
+      setVehicles(vehiclesData || []);
+      setLoading(false);
+    };
+
+    fetchData();
+  }, []);
+
+  const filteredSheets = filter === 'ALL'
+    ? costSheets
     : costSheets.filter(s => s.status === filter);
 
   const getVehicleName = (vehicleId: string) => {
@@ -29,6 +57,10 @@ export default function CostSheets() {
     APPROVED: { label: 'Approved', className: 'bg-success/10 text-success', icon: CheckCircle },
     REJECTED: { label: 'Rejected', className: 'bg-destructive/10 text-destructive', icon: XCircle },
   };
+
+  if (loading) {
+    return <p className="text-center py-12 text-muted-foreground">Loading cost sheets...</p>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">

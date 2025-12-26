@@ -21,23 +21,32 @@ export default function Login() {
     e.preventDefault();
     setIsLoading(true);
 
-    const success = await login(email, password);
-    
-    if (success) {
+    try {
+      const success = await login(email, password);
+
+      if (success) {
+        toast({
+          title: 'Welcome back!',
+          description: 'You have successfully logged in.',
+        });
+        navigate('/dashboard');
+      } else {
+        toast({
+          title: 'Login failed',
+          description: 'Invalid email or password.',
+          variant: 'destructive',
+        });
+      }
+    } catch (err) {
+      console.error(err);
       toast({
-        title: 'Welcome back!',
-        description: 'You have successfully logged in.',
-      });
-      navigate('/dashboard');
-    } else {
-      toast({
-        title: 'Login failed',
-        description: 'Invalid email or password.',
+        title: 'Login error',
+        description: 'Something went wrong while signing in.',
         variant: 'destructive',
       });
+    } finally {
+      setIsLoading(false);
     }
-    
-    setIsLoading(false);
   };
 
   return (
@@ -80,7 +89,7 @@ export default function Login() {
                   className="h-11"
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <div className="relative">
@@ -99,6 +108,7 @@ export default function Login() {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Toggle password visibility"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -109,7 +119,6 @@ export default function Login() {
                 {isLoading ? 'Signing in...' : 'Sign In'}
               </Button>
             </form>
-
           </CardContent>
         </Card>
       </div>

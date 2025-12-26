@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,7 +30,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { getFuelRates, setFuelRates, generateId } from '@/lib/storage';
 import { formatCurrency } from '@/lib/calculations';
 import type { FuelRate, City } from '@/types';
 import { Plus, Fuel, MapPin } from 'lucide-react';
@@ -37,14 +37,20 @@ import { useToast } from '@/hooks/use-toast';
 
 type FuelRateType = 'PETROL' | 'DIESEL' | 'EV';
 const FUEL_TYPES: FuelRateType[] = ['PETROL', 'DIESEL', 'EV'];
-const CITIES: City[] = ['Mumbai', 'Delhi', 'Ahmedabad', 'Chennai', 'Bangalore', 'Hyderabad', 'Vadodara', 'Kolkata', 'Gurugram', 'Pune'];
+const CITIES: City[] = [
+  'Mumbai', 'Delhi', 'Ahmedabad', 'Chennai', 'Bangalore',
+  'Hyderabad', 'Vadodara', 'Kolkata', 'Gurugram', 'Pune'
+];
 
 export default function FuelRates() {
   const { isAdmin } = useAuth();
   const { toast } = useToast();
-  const [rates, setRatesState] = useState<FuelRate[]>(getFuelRates());
+
+  const [rates, setRates] = useState<FuelRate[]>([]);
+  const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedCity, setSelectedCity] = useState<City>('Mumbai');
+
   const [formData, setFormData] = useState({
     fuel_type: 'PETROL' as FuelRateType,
     city: 'Mumbai' as City,
@@ -52,43 +58,59 @@ export default function FuelRates() {
     effective_date: new Date().toISOString().split('T')[0],
   });
 
-  const resetForm = () => {
-    setFormData({
-      fuel_type: 'PETROL',
-      city: 'Mumbai',
-      rate_per_unit: '',
-      effective_date: new Date().toISOString().split('T')[0],
-    });
+  /* ---------------- FETCH ---------------- */
+  const fetchRates = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('fuel_rates')
+      .select('*')
+      .order('effective_date', { ascending: false });
+
+    if (error) {
+      toast({ title: 'Error fetching fuel rates', description: error.message, variant: 'destructive' });
+      console.error(error);
+    } else {
+      setRates(data || []);
+    }
+    setLoading(false);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    fetchRates();
+  }, []);
+
+  /* ---------------- ADD RATE ---------------- */
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const rateData: FuelRate = {
-      id: generateId(),
-      fuel_type: formData.fuel_type,
-      city: formData.city,
-      rate_per_unit: parseFloat(formData.rate_per_unit) || 0,
-      effective_date: formData.effective_date,
-      created_at: new Date().toISOString(),
-    };
+    const { error } = await supabase
+      .from('fuel_rates')
+      .insert([{
+        fuel_type: formData.fuel_type,
+        city: formData.city,
+        rate_per_unit: parseFloat(formData.rate_per_unit),
+        effective_date: formData.effective_date,
+      }]);
 
-    const updatedRates = [...rates, rateData];
-    setFuelRates(updatedRates);
-    setRatesState(updatedRates);
-    setDialogOpen(false);
-    resetForm();
+    if (error) {
+      toast({ title: 'Error saving fuel rate', description: error.message, variant: 'destructive' });
+      console.error(error);
+      return;
+    }
+
     toast({ title: 'Fuel rate added successfully' });
+    setDialogOpen(false);
+    fetchRates();
   };
 
-  // Filter rates by selected city
+  /* ---------------- FILTER & GROUP ---------------- */
   const cityRates = rates.filter(r => r.city === selectedCity);
 
-  // Group by fuel type and sort by date for selected city
   const groupedRates = FUEL_TYPES.map(type => {
     const typeRates = cityRates
       .filter(r => r.fuel_type === type)
       .sort((a, b) => new Date(b.effective_date).getTime() - new Date(a.effective_date).getTime());
+
     return {
       type,
       currentRate: typeRates[0],
@@ -96,38 +118,44 @@ export default function FuelRates() {
     };
   });
 
+  if (loading)
+    return <div className="py-20 text-center text-muted-foreground">Loading fuel rates...</div>;
+
   return (
     <div className="space-y-6 animate-fade-in">
+
+      {/* HEADER */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-display font-bold text-foreground">Fuel Rates</h1>
-          <p className="text-muted-foreground mt-1">City-wise fuel prices for cost calculations</p>
+          <h1 className="text-2xl font-display font-bold">Fuel Rates</h1>
+          <p className="text-muted-foreground mt-1">
+            City-wise fuel prices for cost calculations
+          </p>
         </div>
+
         {isAdmin && (
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button onClick={resetForm}>
+              <Button>
                 <Plus className="w-4 h-4 mr-2" />
                 Add Rate
               </Button>
             </DialogTrigger>
+
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>Add Fuel Rate</DialogTitle>
-                <DialogDescription>
-                  Add a new fuel rate for a specific city
-                </DialogDescription>
+                <DialogDescription>Add a new fuel rate</DialogDescription>
               </DialogHeader>
+
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="city">City</Label>
+                  <Label>City</Label>
                   <Select
                     value={formData.city}
                     onValueChange={(value: City) => setFormData({ ...formData, city: value })}
                   >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {CITIES.map(city => (
                         <SelectItem key={city} value={city}>{city}</SelectItem>
@@ -137,14 +165,12 @@ export default function FuelRates() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="fuel_type">Fuel Type</Label>
+                  <Label>Fuel Type</Label>
                   <Select
                     value={formData.fuel_type}
                     onValueChange={(value: FuelRateType) => setFormData({ ...formData, fuel_type: value })}
                   >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {FUEL_TYPES.map(type => (
                         <SelectItem key={type} value={type}>{type}</SelectItem>
@@ -154,30 +180,23 @@ export default function FuelRates() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="rate">Rate per Unit</Label>
+                  <Label>Rate per Unit</Label>
                   <Input
-                    id="rate"
                     type="number"
                     step="0.01"
-                    min="0"
+                    required
                     value={formData.rate_per_unit}
                     onChange={(e) => setFormData({ ...formData, rate_per_unit: e.target.value })}
-                    placeholder="104.21"
-                    required
                   />
-                  <p className="text-xs text-muted-foreground">
-                    ₹ per litre (or per kWh for EV)
-                  </p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="date">Effective Date</Label>
+                  <Label>Effective Date</Label>
                   <Input
-                    id="date"
                     type="date"
+                    required
                     value={formData.effective_date}
                     onChange={(e) => setFormData({ ...formData, effective_date: e.target.value })}
-                    required
                   />
                 </div>
 
@@ -185,7 +204,7 @@ export default function FuelRates() {
                   <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit">Add Rate</Button>
+                  <Button type="submit">Save</Button>
                 </DialogFooter>
               </form>
             </DialogContent>
@@ -193,39 +212,35 @@ export default function FuelRates() {
         )}
       </div>
 
-      {/* City Selector */}
+      {/* CITY SELECTOR */}
       <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-2">
-            <MapPin className="w-5 h-5 text-primary" />
-            <CardTitle className="text-lg">Select City</CardTitle>
-          </div>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="w-5 h-5" /> Select City
+          </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {CITIES.map(city => (
-              <Button
-                key={city}
-                variant={selectedCity === city ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSelectedCity(city)}
-              >
-                {city}
-              </Button>
-            ))}
-          </div>
+        <CardContent className="flex flex-wrap gap-2">
+          {CITIES.map(city => (
+            <Button
+              key={city}
+              size="sm"
+              variant={selectedCity === city ? 'default' : 'outline'}
+              onClick={() => setSelectedCity(city)}
+            >
+              {city}
+            </Button>
+          ))}
         </CardContent>
       </Card>
 
-      {/* Current Rates Cards */}
+      {/* CURRENT RATES */}
       <div className="grid gap-4 md:grid-cols-3">
         {groupedRates.map(({ type, currentRate }) => (
           <Card key={type}>
-            <CardHeader className="pb-2">
-              <div className="flex items-center gap-2">
-                <Fuel className="w-5 h-5 text-primary" />
-                <CardTitle className="text-lg">{type}</CardTitle>
-              </div>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Fuel className="w-5 h-5" /> {type}
+              </CardTitle>
               <CardDescription>{selectedCity}</CardDescription>
             </CardHeader>
             <CardContent>
@@ -234,8 +249,8 @@ export default function FuelRates() {
                   <p className="text-3xl font-bold">
                     {formatCurrency(currentRate.rate_per_unit)}
                   </p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    per {type === 'EV' ? 'kWh' : 'litre'} • Since {new Date(currentRate.effective_date).toLocaleDateString()}
+                  <p className="text-sm text-muted-foreground">
+                    Since {new Date(currentRate.effective_date).toLocaleDateString()}
                   </p>
                 </>
               ) : (
@@ -246,57 +261,44 @@ export default function FuelRates() {
         ))}
       </div>
 
-      {/* Rate History */}
+      {/* HISTORY */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Rate History - {selectedCity}</CardTitle>
-          <CardDescription>All fuel rates with effective dates for {selectedCity}</CardDescription>
+          <CardTitle>Rate History – {selectedCity}</CardTitle>
         </CardHeader>
         <CardContent>
-          {cityRates.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Fuel className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>No fuel rates added for {selectedCity} yet</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fuel Type</TableHead>
-                    <TableHead>Rate per Unit</TableHead>
-                    <TableHead>Effective Date</TableHead>
-                    <TableHead>Status</TableHead>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Fuel</TableHead>
+                <TableHead>Rate</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {cityRates.map(rate => {
+                const isCurrent =
+                  groupedRates.find(g => g.type === rate.fuel_type)?.currentRate?.id === rate.id;
+
+                return (
+                  <TableRow key={rate.id}>
+                    <TableCell>{rate.fuel_type}</TableCell>
+                    <TableCell>{formatCurrency(rate.rate_per_unit)}</TableCell>
+                    <TableCell>{new Date(rate.effective_date).toLocaleDateString()}</TableCell>
+                    <TableCell>
+                      <Badge variant={isCurrent ? 'default' : 'secondary'}>
+                        {isCurrent ? 'Current' : 'Historical'}
+                      </Badge>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {[...cityRates]
-                    .sort((a, b) => new Date(b.effective_date).getTime() - new Date(a.effective_date).getTime())
-                    .map((rate) => {
-                      const isCurrent = groupedRates.find(g => g.type === rate.fuel_type)?.currentRate?.id === rate.id;
-                      return (
-                        <TableRow key={rate.id}>
-                          <TableCell>
-                            <Badge variant="outline">{rate.fuel_type}</Badge>
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {formatCurrency(rate.rate_per_unit)}/{rate.fuel_type === 'EV' ? 'kWh' : 'L'}
-                          </TableCell>
-                          <TableCell>{new Date(rate.effective_date).toLocaleDateString()}</TableCell>
-                          <TableCell>
-                            <Badge variant={isCurrent ? 'default' : 'secondary'}>
-                              {isCurrent ? 'Current' : 'Historical'}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+                );
+              })}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
+
     </div>
   );
 }

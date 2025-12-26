@@ -7,200 +7,195 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Mail, Plus, X, Save, Bell } from 'lucide-react';
 import { toast } from 'sonner';
-import { getEmailSettings, setEmailSettings, generateId } from '@/lib/storage';
-import type { EmailSettings as EmailSettingsType } from '@/types';
+import { supabase } from '@/supabase/client';
+import type { EmailSettings } from '@/types';
 
-export default function EmailSettings() {
-  const [settings, setSettings] = useState<EmailSettingsType>({
-    id: generateId(),
-    manager_emails: [],
-    ceo_email: '',
-    notifications_enabled: true,
-    updated_at: new Date().toISOString(),
-  });
-  const [newManagerEmail, setNewManagerEmail] = useState('');
+export default function EmailSettingsPage() {
+  const [settings, setSettings] = useState<EmailSettings | null>(null);
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  /* ---------------- FETCH ---------------- */
+  const fetchSettings = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('email_settings')
+      .select('*')
+      .single();
+
+    if (error) {
+      toast.error('Failed to load email settings');
+      console.error(error);
+    } else {
+      setSettings(data);
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
-    const savedSettings = getEmailSettings();
-    if (savedSettings) {
-      setSettings(savedSettings);
-    }
+    fetchSettings();
   }, []);
 
-  const handleAddManagerEmail = () => {
-    const email = newManagerEmail.trim().toLowerCase();
-    if (!email) {
-      toast.error('Please enter an email address');
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      toast.error('Please enter a valid email address');
-      return;
-    }
-    if (settings.manager_emails.includes(email)) {
-      toast.error('This email is already added');
-      return;
-    }
-    setSettings(prev => ({
-      ...prev,
-      manager_emails: [...prev.manager_emails, email],
-    }));
-    setNewManagerEmail('');
+  /* ---------------- ADMIN EMAILS ---------------- */
+  const addAdminEmail = () => {
+    const email = newAdminEmail.trim().toLowerCase();
+
+    if (!email) return toast.error('Enter an email');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      return toast.error('Invalid email');
+
+    if (settings?.admin_emails.includes(email))
+      return toast.error('Email already added');
+
+    setSettings(prev =>
+      prev ? { ...prev, admin_emails: [...prev.admin_emails, email] } : prev
+    );
+    setNewAdminEmail('');
   };
 
-  const handleRemoveManagerEmail = (email: string) => {
-    setSettings(prev => ({
-      ...prev,
-      manager_emails: prev.manager_emails.filter(e => e !== email),
-    }));
+  const removeAdminEmail = (email: string) => {
+    setSettings(prev =>
+      prev
+        ? { ...prev, admin_emails: prev.admin_emails.filter(e => e !== email) }
+        : prev
+    );
   };
 
-  const handleSave = () => {
+  /* ---------------- SAVE ---------------- */
+  const saveSettings = async () => {
+    if (!settings) return;
+
     if (settings.notifications_enabled) {
-      if (settings.manager_emails.length === 0) {
-        toast.error('Please add at least one manager email');
-        return;
-      }
-      if (!settings.ceo_email) {
-        toast.error('Please enter CEO email');
-        return;
-      }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(settings.ceo_email)) {
-        toast.error('Please enter a valid CEO email address');
-        return;
-      }
+      if (settings.admin_emails.length === 0)
+        return toast.error('Add at least one admin email');
+
+      if (!settings.super_admin_email)
+        return toast.error('Enter Super Admin email');
     }
 
-    const updatedSettings = {
-      ...settings,
-      updated_at: new Date().toISOString(),
-    };
-    setEmailSettings(updatedSettings);
-    setSettings(updatedSettings);
-    toast.success('Email settings saved successfully');
+    const { error } = await supabase
+      .from('email_settings')
+      .update({
+        admin_emails: settings.admin_emails,
+        super_admin_email: settings.super_admin_email,
+        notifications_enabled: settings.notifications_enabled,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', settings.id);
+
+    if (error) {
+      toast.error('Failed to save settings');
+      console.error(error);
+    } else {
+      toast.success('Email settings saved');
+    }
   };
+
+  if (loading || !settings)
+    return <div className="py-20 text-center text-muted-foreground">Loading email settings...</div>;
 
   return (
     <div className="space-y-6">
+
+      {/* HEADER */}
       <div>
-        <h1 className="text-2xl font-display font-bold text-foreground">Email Notification Settings</h1>
+        <h1 className="text-2xl font-display font-bold">Email Notification Settings</h1>
         <p className="text-muted-foreground mt-1">
-          Configure email addresses for approval workflow notifications
+          Configure Admin & Super Admin notification emails
         </p>
       </div>
 
+      {/* NOTIFICATIONS */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Bell className="w-5 h-5" />
-            Notification Preferences
+            Notifications
           </CardTitle>
-          <CardDescription>
-            Enable or disable email notifications for the approval workflow
-          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="notifications">Enable Email Notifications</Label>
-              <p className="text-sm text-muted-foreground">
-                Send email alerts when cost sheets are submitted, approved, or rejected
-              </p>
-            </div>
-            <Switch
-              id="notifications"
-              checked={settings.notifications_enabled}
-              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, notifications_enabled: checked }))}
-            />
+        <CardContent className="flex items-center justify-between">
+          <div>
+            <Label>Enable Notifications</Label>
+            <p className="text-sm text-muted-foreground">
+              Email alerts for cost sheet approvals
+            </p>
           </div>
+          <Switch
+            checked={settings.notifications_enabled}
+            onCheckedChange={(checked) =>
+              setSettings(prev => prev ? { ...prev, notifications_enabled: checked } : prev)
+            }
+          />
         </CardContent>
       </Card>
 
+      {/* ADMIN EMAILS */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Mail className="w-5 h-5" />
-            Manager Emails
-          </CardTitle>
+          <CardTitle>Admin Emails</CardTitle>
           <CardDescription>
-            Managers will receive notifications when cost sheets are submitted for approval
+            Admins receive notifications on submissions
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-2">
             <Input
               type="email"
-              placeholder="Enter manager email address"
-              value={newManagerEmail}
-              onChange={(e) => setNewManagerEmail(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleAddManagerEmail();
-                }
-              }}
+              placeholder="admin@company.com"
+              value={newAdminEmail}
+              onChange={(e) => setNewAdminEmail(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addAdminEmail()}
             />
-            <Button onClick={handleAddManagerEmail} variant="outline">
-              <Plus className="w-4 h-4 mr-1" />
-              Add
+            <Button variant="outline" onClick={addAdminEmail}>
+              <Plus className="w-4 h-4 mr-1" /> Add
             </Button>
           </div>
 
-          {settings.manager_emails.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {settings.manager_emails.map((email) => (
-                <Badge
-                  key={email}
-                  variant="secondary"
-                  className="px-3 py-1.5 text-sm flex items-center gap-2"
-                >
-                  <Mail className="w-3 h-3" />
-                  {email}
-                  <button
-                    onClick={() => handleRemoveManagerEmail(email)}
-                    className="ml-1 hover:text-destructive transition-colors"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </Badge>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground italic">No manager emails added yet</p>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Mail className="w-5 h-5" />
-            CEO Email
-          </CardTitle>
-          <CardDescription>
-            CEO will receive notifications for all cost sheet status changes
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            <Label htmlFor="ceo-email">CEO Email Address</Label>
-            <Input
-              id="ceo-email"
-              type="email"
-              placeholder="ceo@company.com"
-              value={settings.ceo_email}
-              onChange={(e) => setSettings(prev => ({ ...prev, ceo_email: e.target.value.trim().toLowerCase() }))}
-            />
+          <div className="flex flex-wrap gap-2">
+            {settings.admin_emails.map(email => (
+              <Badge key={email} variant="secondary" className="flex items-center gap-2">
+                <Mail className="w-3 h-3" />
+                {email}
+                <button onClick={() => removeAdminEmail(email)}>
+                  <X className="w-3 h-3" />
+                </button>
+              </Badge>
+            ))}
           </div>
         </CardContent>
       </Card>
 
+      {/* SUPER ADMIN */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Super Admin Email</CardTitle>
+          <CardDescription>
+            Super Admin receives all approval notifications
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Label>Super Admin Email</Label>
+          <Input
+            type="email"
+            placeholder="superadmin@company.com"
+            value={settings.super_admin_email}
+            onChange={(e) =>
+              setSettings(prev =>
+                prev ? { ...prev, super_admin_email: e.target.value.toLowerCase() } : prev
+              )
+            }
+          />
+        </CardContent>
+      </Card>
+
+      {/* SAVE */}
       <div className="flex justify-end">
-        <Button onClick={handleSave} size="lg">
+        <Button size="lg" onClick={saveSettings}>
           <Save className="w-4 h-4 mr-2" />
           Save Settings
         </Button>
       </div>
+
     </div>
   );
 }

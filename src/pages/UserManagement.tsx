@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,7 +29,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { getUsers, setUsers, generateId } from '@/lib/storage';
+import { supabase } from '@/supabase/client';
 import type { User, UserRole } from '@/types';
 import { Plus, Pencil, Users, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -39,7 +39,8 @@ const USER_ROLES: UserRole[] = ['SUPERADMIN', 'ADMIN', 'STAFF'];
 export default function UserManagement() {
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
-  const [users, setUsersState] = useState<User[]>(getUsers());
+
+  const [users, setUsers] = useState<User[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -49,14 +50,26 @@ export default function UserManagement() {
     password: '',
     role: 'STAFF' as UserRole,
   });
+  const [loading, setLoading] = useState(true);
+
+  // Fetch users from Supabase
+  useEffect(() => {
+    async function fetchUsers() {
+      setLoading(true);
+      const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: true });
+      if (error) {
+        console.error(error);
+        toast({ title: 'Failed to fetch users', variant: 'destructive' });
+      } else {
+        setUsers(data as User[]);
+      }
+      setLoading(false);
+    }
+    fetchUsers();
+  }, []);
 
   const resetForm = () => {
-    setFormData({
-      full_name: '',
-      email: '',
-      password: '',
-      role: 'STAFF',
-    });
+    setFormData({ full_name: '', email: '', password: '', role: 'STAFF' });
     setEditingUser(null);
     setShowPassword(false);
   };
@@ -67,7 +80,7 @@ export default function UserManagement() {
       setFormData({
         full_name: user.full_name,
         email: user.email,
-        password: '', // Don't show existing password
+        password: '', // leave blank
         role: user.role,
       });
     } else {
@@ -76,65 +89,100 @@ export default function UserManagement() {
     setDialogOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Check for duplicate email
-    const existingUser = users.find(
-      u => u.email.toLowerCase() === formData.email.toLowerCase() && u.id !== editingUser?.id
-    );
-    if (existingUser) {
-      toast({ title: 'Email already exists', variant: 'destructive' });
-      return;
+    try {
+      if (editingUser) {
+        // Update metadata only (full_name, role)
+        const { data, error } = await supabase
+          .from('users')
+          .update({
+            full_name: formData.full_name,
+            role: formData.role,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', editingUser.id)
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        setUsers(users.map(u => u.id === editingUser.id ? data : u));
+        toast({ title: 'User updated successfully' });
+
+      } else {
+        // Create Auth user
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: formData.email,
+          password: formData.password,
+        });
+
+        if (authError) throw authError;
+
+        const userId = authData.user?.id;
+        if (!userId) throw new Error('Failed to get user ID from Supabase Auth');
+
+        // Insert metadata into users table
+        const { data, error } = await supabase
+          .from('users')
+          .insert([{
+            id: userId,
+            full_name: formData.full_name,
+            email: formData.email,
+            role: formData.role,
+            is_active: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }])
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        setUsers([...users, data]);
+        toast({ title: 'User added successfully' });
+      }
+
+      setDialogOpen(false);
+      resetForm();
+    } catch (err: any) {
+      console.error(err);
+      toast({ title: 'Error saving user', description: err.message, variant: 'destructive' });
     }
-
-    // Validate password for new users
-    if (!editingUser && !formData.password) {
-      toast({ title: 'Password is required for new users', variant: 'destructive' });
-      return;
-    }
-
-    const now = new Date().toISOString();
-    const userData: User = {
-      id: editingUser?.id || generateId(),
-      full_name: formData.full_name,
-      email: formData.email,
-      password: formData.password || editingUser?.password || '',
-      role: formData.role,
-      is_active: editingUser?.is_active ?? true,
-      created_at: editingUser?.created_at || now,
-      updated_at: now,
-    };
-
-    let updatedUsers: User[];
-    if (editingUser) {
-      updatedUsers = users.map(u => u.id === editingUser.id ? userData : u);
-      toast({ title: 'User updated successfully' });
-    } else {
-      updatedUsers = [...users, userData];
-      toast({ title: 'User added successfully' });
-    }
-
-    setUsers(updatedUsers);
-    setUsersState(updatedUsers);
-    setDialogOpen(false);
-    resetForm();
   };
 
-  const handleToggleActive = (id: string) => {
-    // Prevent deactivating self
+
+  const handleToggleActive = async (id: string) => {
     if (id === currentUser?.id) {
       toast({ title: 'Cannot deactivate your own account', variant: 'destructive' });
       return;
     }
 
-    const updatedUsers = users.map(u =>
-      u.id === id ? { ...u, is_active: !u.is_active, updated_at: new Date().toISOString() } : u
-    );
-    setUsers(updatedUsers);
-    setUsersState(updatedUsers);
-    toast({ title: 'User status updated' });
+    const userToUpdate = users.find(u => u.id === id);
+    if (!userToUpdate) return;
+
+    const newStatus = !userToUpdate.is_active;
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .update({ is_active: newStatus, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setUsers(users.map(u => u.id === id ? data : u));
+      toast({ title: 'User status updated' });
+    } catch (err: any) {
+      console.error(err);
+      toast({ title: 'Error updating status', description: err.message, variant: 'destructive' });
+    }
   };
+
+  if (loading) return <div className="text-center py-20 text-muted-foreground">Loading users...</div>;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -163,7 +211,7 @@ export default function UserManagement() {
                 <Input
                   id="full_name"
                   value={formData.full_name}
-                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                  onChange={e => setFormData({ ...formData, full_name: e.target.value })}
                   placeholder="John Doe"
                   required
                 />
@@ -175,7 +223,7 @@ export default function UserManagement() {
                   id="email"
                   type="email"
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onChange={e => setFormData({ ...formData, email: e.target.value })}
                   placeholder="john@company.com"
                   required
                 />
@@ -190,7 +238,7 @@ export default function UserManagement() {
                     id="password"
                     type={showPassword ? 'text' : 'password'}
                     value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    onChange={e => setFormData({ ...formData, password: e.target.value })}
                     placeholder={editingUser ? '••••••••' : 'Enter password'}
                     required={!editingUser}
                   />
@@ -225,9 +273,7 @@ export default function UserManagement() {
                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit">
-                  {editingUser ? 'Update User' : 'Add User'}
-                </Button>
+                <Button type="submit">{editingUser ? 'Update User' : 'Add User'}</Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -259,36 +305,27 @@ export default function UserManagement() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.full_name}</TableCell>
-                      <TableCell>{user.email}</TableCell>
+                  {users.map(u => (
+                    <TableRow key={u.id}>
+                      <TableCell className="font-medium">{u.full_name}</TableCell>
+                      <TableCell>{u.email}</TableCell>
                       <TableCell>
-                        <Badge variant={user.role === 'SUPERADMIN' ? 'default' : user.role === 'ADMIN' ? 'secondary' : 'outline'}>
-                          {user.role}
+                        <Badge variant={u.role === 'SUPERADMIN' ? 'default' : u.role === 'ADMIN' ? 'secondary' : 'outline'}>
+                          {u.role}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={user.is_active ? 'default' : 'secondary'}>
-                          {user.is_active ? 'Active' : 'Inactive'}
+                        <Badge variant={u.is_active ? 'default' : 'secondary'}>
+                          {u.is_active ? 'Active' : 'Inactive'}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleOpenDialog(user)}
-                          >
+                          <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(u)}>
                             <Pencil className="w-4 h-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleToggleActive(user.id)}
-                            disabled={user.id === currentUser?.id}
-                          >
-                            {user.is_active ? 'Deactivate' : 'Activate'}
+                          <Button variant="ghost" size="sm" onClick={() => handleToggleActive(u.id)} disabled={u.id === currentUser?.id}>
+                            {u.is_active ? 'Deactivate' : 'Activate'}
                           </Button>
                         </div>
                       </TableCell>

@@ -13,20 +13,22 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { getVehicles, getCostSheets, setCostSheets, generateId, getActiveInterestRate, getActiveAdminChargePercent, getCurrentFuelRate } from '@/lib/storage';
+import { supabase } from '@/supabase/client';
 import { calculateCostSheet, formatCurrency } from '@/lib/calculations';
-import type { CostSheet, CostSheetFormData, Vehicle } from '@/types';
+import type { CostSheet, CostSheetFormData, Vehicle, CostSheetStatus } from '@/types';
 import { ArrowLeft, Save, Send, Calculator, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
+
 
 const formSchema = z.object({
   company_name: z.string().min(1, 'Company name is required').max(200),
   vehicle_id: z.string().min(1, 'Please select a vehicle'),
   tenure_years: z.number().min(1, 'Minimum 1 year').max(10, 'Maximum 10 years'),
   vehicle_cost: z.number().min(1, 'Vehicle cost is required'),
+  down_payment_percent: z.number().min(0, 'Minimum 0%').max(100, 'Maximum 100%'),
   registration_charges: z.number().min(0),
-  daily_km: z.number().min(1, 'Daily km is required'),
+  monthly_km: z.number().min(1, 'Monthly km is required'),
   daily_hours: z.number().min(1, 'Daily hours is required').max(24),
   drivers_count: z.number().min(0),
   driver_salary_per_driver: z.number().min(0),
@@ -37,21 +39,23 @@ const formSchema = z.object({
   permit_cost: z.number().min(0),
 });
 
+
 export default function CostSheetForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user, isAdmin } = useAuth();
   const { toast } = useToast();
-  const vehicles = getVehicles().filter(v => v.is_active);
   const isEditing = !!id;
+
 
   const [formData, setFormData] = useState<CostSheetFormData>({
     company_name: '',
     vehicle_id: '',
     tenure_years: 3,
     vehicle_cost: 0,
+    down_payment_percent: 20,
     registration_charges: 0,
-    daily_km: 100,
+    monthly_km: 3000,
     daily_hours: 8,
     drivers_count: 1,
     driver_salary_per_driver: 15000,
@@ -62,46 +66,283 @@ export default function CostSheetForm() {
     permit_cost: 0,
   });
 
+  // City state
+  const [selectedCity, setSelectedCity] = useState('');
+  const [cities, setCities] = useState<string[]>([]);
+
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  
+  // Dynamic rates from Supabase
+  const [interestRate, setInterestRate] = useState(12);
+  const [adminChargePercent, setAdminChargePercent] = useState(0);
+  const [insuranceRate, setInsuranceRate] = useState(3.5);
+  const [fuelRate, setFuelRate] = useState(0);
+
+
+  // Fetch cities on mount
+  useEffect(() => {
+    fetchCities();
+  }, []);
+
+  // Fetch vehicles on mount
+  useEffect(() => {
+    fetchVehicles();
+    fetchDynamicRates();
+  }, []);
+
+
+  // Fetch fuel rate when vehicle or city changes
+  useEffect(() => {
+    if (formData.vehicle_id && selectedCity) {
+      const vehicle = vehicles.find(v => v.id === formData.vehicle_id);
+      if (vehicle) {
+        fetchFuelRate(vehicle.fuel_type, selectedCity);
+      }
+    }
+  }, [formData.vehicle_id, selectedCity, vehicles]);
+
 
   // Load existing cost sheet if editing
   useEffect(() => {
-    if (id) {
-      const costSheets = getCostSheets();
-      const existing = costSheets.find(s => s.id === id);
-      if (existing) {
-        // All cost sheets can be edited - will be reset to DRAFT
+    if (id && user) {
+      fetchCostSheet(id);
+    }
+  }, [id, user]);
+
+
+  const fetchCities = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('cities')
+        .select('name')
+        .order('name');
+
+      if (error) throw error;
+      const cityList = (data || []).map(c => c.name);
+      setCities(cityList);
+      if (cityList.length > 0) {
+        setSelectedCity(cityList[0]);
+      }
+    } catch (error: any) {
+      console.error('Error fetching cities:', error);
+    }
+  };
+
+  const fetchVehicles = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('vehicles')
+        .select('*')
+        .eq('is_active', true)
+        .order('brand_name')
+        .order('model_name');
+
+
+      if (error) throw error;
+      setVehicles(data || []);
+    } catch (error: any) {
+      console.error('Error fetching vehicles:', error);
+      toast({ title: 'Failed to load vehicles', variant: 'destructive' });
+    }
+  };
+
+
+  const fetchDynamicRates = async () => {
+    try {
+      // Fetch interest rate
+      const { data: irData } = await supabase
+        .from('interest_rates')
+        .select('*')
+        .eq('is_active', true)
+        .order('effective_from', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (irData) setInterestRate(irData.interest_rate_percent);
+
+
+      // Fetch admin charge
+      const { data: acData } = await supabase
+        .from('admin_charges')
+        .select('*')
+        .eq('is_active', true)
+        .order('effective_from', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (acData) setAdminChargePercent(acData.admin_charge_percent);
+
+
+      // Fetch insurance rate
+      const { data: insData } = await supabase
+        .from('insurance_rates')
+        .select('*')
+        .eq('is_active', true)
+        .order('effective_from', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (insData) setInsuranceRate(insData.insurance_rate_percent);
+    } catch (error: any) {
+      console.error('Error fetching dynamic rates:', error);
+      // Use defaults, don't crash
+    }
+  };
+
+
+  const fetchFuelRate = async (fuelType: string, city: string) => {
+    try {
+      const { data } = await supabase
+        .from('fuel_rates')
+        .select('*')
+        .eq('fuel_type', fuelType)
+        .eq('city', city)
+        .order('effective_date', { ascending: false })
+        .limit(1)
+        .single();
+
+
+      if (data) setFuelRate(data.rate_per_unit);
+    } catch (error: any) {
+      console.error('Error fetching fuel rate:', error);
+      setFuelRate(0);
+    }
+  };
+
+
+  const fetchCostSheet = async (costSheetId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('cost_sheets')
+        .select('*')
+        .eq('id', costSheetId)
+        .single();
+
+
+      if (error) throw error;
+
+
+      if (data) {
         setFormData({
-          company_name: existing.company_name,
-          vehicle_id: existing.vehicle_id,
-          tenure_years: existing.tenure_years,
-          vehicle_cost: existing.vehicle_cost,
-          registration_charges: existing.registration_charges,
-          daily_km: existing.daily_km,
-          daily_hours: existing.daily_hours,
-          drivers_count: existing.drivers_count,
-          driver_salary_per_driver: existing.driver_salary_per_driver,
-          parking_charges: existing.parking_charges,
-          maintenance_cost: existing.maintenance_cost,
-          supervisor_cost: existing.supervisor_cost,
-          gps_camera_cost: existing.gps_camera_cost,
-          permit_cost: existing.permit_cost,
+          company_name: data.company_name,
+          vehicle_id: data.vehicle_id,
+          tenure_years: data.tenure_years,
+          vehicle_cost: data.vehicle_cost,
+          down_payment_percent: (data.down_payment_amount / data.vehicle_cost) * 100,
+          registration_charges: data.registration_charges,
+          monthly_km: data.monthly_km,
+          daily_hours: data.daily_hours,
+          drivers_count: data.drivers_count,
+          driver_salary_per_driver: data.driver_salary_per_driver,
+          parking_charges: data.parking_charges,
+          maintenance_cost: data.maintenance_cost,
+          supervisor_cost: data.supervisor_cost,
+          gps_camera_cost: data.gps_camera_cost,
+          permit_cost: data.permit_cost,
         });
       }
+    } catch (error: any) {
+      console.error('Error fetching cost sheet:', error);
+      toast({ title: 'Failed to load cost sheet', variant: 'destructive' });
     }
-  }, [id]);
+  };
 
-  // Auto-calculated fields
-  const calculations = useMemo(() => calculateCostSheet(formData), [formData]);
-  
+
+  // Synchronous calculation - NOW WORKS WITH useMemo
+  const calculations = useMemo(() => {
+    if (!formData.vehicle_id) {
+      return {
+        tenure_months: 0,
+        down_payment_amount: 0,
+        loan_amount: 0,
+        emi_amount: 0,
+        insurance_amount: 0,
+        subtotal_a: 0,
+        fuel_cost: 0,
+        total_driver_cost: 0,
+        subtotal_b: 0,
+        admin_charge_percent: 0,
+        admin_charge_amount: 0,
+        grand_total: 0,
+      };
+    }
+
+
+    const tenure_months = formData.tenure_years * 12;
+    const down_payment_amount = formData.vehicle_cost * (formData.down_payment_percent / 100);
+    const loan_amount = formData.vehicle_cost - down_payment_amount;
+
+
+    // EMI calculation (reducing balance)
+    const monthlyRate = interestRate / 100 / 12;
+    const n = tenure_months;
+    const emi_amount =
+      monthlyRate <= 0
+        ? loan_amount / tenure_months
+        : (loan_amount * monthlyRate * Math.pow(1 + monthlyRate, n)) /
+          (Math.pow(1 + monthlyRate, n) - 1);
+
+
+    const insurance_amount = (formData.vehicle_cost * (insuranceRate / 100)) / 12;
+    const subtotal_a = emi_amount + insurance_amount + formData.registration_charges;
+
+
+    // Fuel cost calculation using vehicle mileage and city-based fuel rate
+    const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id);
+    const mileage = selectedVehicle?.mileage_km_per_unit ?? 25;
+    const fuel_cost = (formData.monthly_km / mileage) * fuelRate;
+
+
+    // Driver cost
+    const total_driver_cost = formData.drivers_count * formData.driver_salary_per_driver;
+
+
+    // Subtotal B
+    const subtotal_b =
+      fuel_cost +
+      total_driver_cost +
+      formData.parking_charges +
+      formData.maintenance_cost +
+      formData.supervisor_cost +
+      formData.gps_camera_cost +
+      formData.permit_cost;
+
+
+    // Admin charge
+    const admin_charge_amount = (subtotal_a + subtotal_b) * (adminChargePercent / 100);
+
+
+    // Grand total
+    const grand_total = subtotal_a + subtotal_b + admin_charge_amount;
+
+
+    return {
+      tenure_months,
+      down_payment_amount,
+      loan_amount,
+      emi_amount,
+      insurance_amount,
+      subtotal_a,
+      fuel_cost,
+      total_driver_cost,
+      subtotal_b,
+      admin_charge_percent: adminChargePercent,
+      admin_charge_amount,
+      grand_total,
+    };
+  }, [formData, vehicles, interestRate, adminChargePercent, insuranceRate, fuelRate]);
+
+
   const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id);
-  const interestRate = getActiveInterestRate();
-  const currentFuelRate = selectedVehicle ? getCurrentFuelRate(selectedVehicle.fuel_type) : 0;
+
 
   const updateField = (field: keyof CostSheetFormData, value: string | number) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     setErrors(prev => ({ ...prev, [field]: '' }));
   };
+
 
   const validateForm = (): boolean => {
     try {
@@ -120,74 +361,100 @@ export default function CostSheetForm() {
     }
   };
 
-  const saveCostSheet = (status: 'DRAFT' | 'PENDING_APPROVAL') => {
-    if (!validateForm()) {
+
+  const saveCostSheet = async (status: CostSheetStatus) => {
+    if (!validateForm() || !user) {
       toast({ title: 'Please fix the errors', variant: 'destructive' });
       return;
     }
 
-    const now = new Date().toISOString();
-    const costSheets = getCostSheets();
-    const existingSheet = id ? costSheets.find(s => s.id === id) : null;
-    
-    // When editing, always reset to DRAFT first (user needs to manually submit for approval)
-    const finalStatus = isEditing ? 'DRAFT' : status;
-    
-    const costSheetData: CostSheet = {
-      id: id || generateId(),
-      company_name: formData.company_name.trim(),
-      vehicle_id: formData.vehicle_id,
-      tenure_years: formData.tenure_years,
-      tenure_months: calculations.tenure_months,
-      vehicle_cost: formData.vehicle_cost,
-      emi_amount: calculations.emi_amount,
-      insurance_amount: calculations.insurance_amount,
-      registration_charges: formData.registration_charges,
-      subtotal_a: calculations.subtotal_a,
-      daily_km: formData.daily_km,
-      daily_hours: formData.daily_hours,
-      fuel_cost: calculations.fuel_cost,
-      drivers_count: formData.drivers_count,
-      driver_salary_per_driver: formData.driver_salary_per_driver,
-      total_driver_cost: calculations.total_driver_cost,
-      parking_charges: formData.parking_charges,
-      maintenance_cost: formData.maintenance_cost,
-      supervisor_cost: formData.supervisor_cost,
-      gps_camera_cost: formData.gps_camera_cost,
-      permit_cost: formData.permit_cost,
-      subtotal_b: calculations.subtotal_b,
-      admin_charge_percent: calculations.admin_charge_percent,
-      admin_charge_amount: calculations.admin_charge_amount,
-      grand_total: calculations.grand_total,
-      status: finalStatus,
-      approval_remarks: '',
-      submitted_at: finalStatus === 'PENDING_APPROVAL' ? now : null,
-      approved_at: null,
-      approved_by: null,
-      pdf_url: null,
-      created_by: existingSheet?.created_by || user?.id || '',
-      created_at: existingSheet?.created_at || now,
-      updated_at: now,
-    };
 
-    let updatedSheets: CostSheet[];
-    if (isEditing) {
-      updatedSheets = costSheets.map(s => s.id === id ? costSheetData : s);
-    } else {
-      updatedSheets = [...costSheets, costSheetData];
-    }
+    setLoading(true);
+    try {
+      const now = new Date().toISOString();
+      const finalStatus = isEditing ? 'DRAFT' : status;
 
-    setCostSheets(updatedSheets);
-    
-    if (isEditing) {
-      toast({ title: 'Cost sheet updated and set to draft. Submit for approval when ready.' });
-    } else {
+
+      const costSheetData: Omit<CostSheet, 'id' | 'created_at' | 'updated_at'> = {
+        company_name: formData.company_name.trim(),
+        vehicle_id: formData.vehicle_id,
+        tenure_years: formData.tenure_years,
+        tenure_months: calculations.tenure_months,
+        vehicle_cost: formData.vehicle_cost,
+        down_payment_percent: formData.down_payment_percent,
+        down_payment_amount: calculations.down_payment_amount,
+        loan_amount: calculations.loan_amount,
+        emi_amount: calculations.emi_amount,
+        insurance_amount: calculations.insurance_amount,
+        registration_charges: formData.registration_charges,
+        subtotal_a: calculations.subtotal_a,
+        monthly_km: formData.monthly_km,
+        daily_hours: formData.daily_hours,
+        fuel_cost: calculations.fuel_cost,
+        drivers_count: formData.drivers_count,
+        driver_salary_per_driver: formData.driver_salary_per_driver,
+        total_driver_cost: calculations.total_driver_cost,
+        parking_charges: formData.parking_charges,
+        maintenance_cost: formData.maintenance_cost,
+        supervisor_cost: formData.supervisor_cost,
+        gps_camera_cost: formData.gps_camera_cost,
+        permit_cost: formData.permit_cost,
+        subtotal_b: calculations.subtotal_b,
+        admin_charge_percent: calculations.admin_charge_percent,
+        admin_charge_amount: calculations.admin_charge_amount,
+        grand_total: calculations.grand_total,
+        status: finalStatus,
+        approval_remarks: '',
+        submitted_at: finalStatus === 'PENDING_APPROVAL' ? now : null,
+        approved_at: null,
+        approved_by: null,
+        pdf_url: null,
+        created_by: user.id,
+      };
+
+
+      let result;
+      if (isEditing) {
+        result = await supabase
+          .from('cost_sheets')
+          .update({ ...costSheetData, updated_at: now })
+          .eq('id', id!)
+          .select()
+          .single();
+      } else {
+        result = await supabase
+          .from('cost_sheets')
+          .insert(costSheetData)
+          .select()
+          .single();
+      }
+
+
+      if (result.error) {
+        throw result.error;
+      }
+
+
       toast({ 
-        title: status === 'DRAFT' ? 'Cost sheet saved as draft' : 'Cost sheet submitted for approval' 
+        title: isEditing 
+          ? 'Cost sheet updated and set to draft. Submit for approval when ready.' 
+          : status === 'DRAFT' 
+            ? 'Cost sheet saved as draft' 
+            : 'Cost sheet submitted for approval' 
       });
+      navigate('/cost-sheets');
+    } catch (error: any) {
+      console.error('Error saving cost sheet:', error);
+      toast({ 
+        title: 'Failed to save cost sheet', 
+        description: error.message,
+        variant: 'destructive' 
+      });
+    } finally {
+      setLoading(false);
     }
-    navigate('/cost-sheets');
   };
+
 
   return (
     <div className="space-y-6 animate-fade-in max-w-4xl mx-auto">
@@ -206,11 +473,12 @@ export default function CostSheetForm() {
         </div>
       </div>
 
-      {/* Company & Vehicle Section */}
+
+      {/* Company, City & Vehicle Section */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Basic Information</CardTitle>
-          <CardDescription>Company and vehicle details</CardDescription>
+          <CardDescription>Company, location, and vehicle details</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
@@ -223,6 +491,22 @@ export default function CostSheetForm() {
               maxLength={200}
             />
             {errors.company_name && <p className="text-xs text-destructive">{errors.company_name}</p>}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="city">City *</Label>
+            <Select value={selectedCity} onValueChange={setSelectedCity}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select city" />
+              </SelectTrigger>
+              <SelectContent>
+                {cities.map(city => (
+                  <SelectItem key={city} value={city}>
+                    {city}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
@@ -242,6 +526,7 @@ export default function CostSheetForm() {
             {errors.vehicle_id && <p className="text-xs text-destructive">{errors.vehicle_id}</p>}
           </div>
 
+
           <div className="space-y-2">
             <Label htmlFor="tenure">Tenure (Years) *</Label>
             <Input
@@ -255,6 +540,7 @@ export default function CostSheetForm() {
             <p className="text-xs text-muted-foreground">= {calculations.tenure_months} months</p>
           </div>
 
+
           <div className="space-y-2">
             <Label htmlFor="vehicle_cost">Vehicle Cost (₹) *</Label>
             <Input
@@ -265,6 +551,42 @@ export default function CostSheetForm() {
               onChange={(e) => updateField('vehicle_cost', parseFloat(e.target.value) || 0)}
               placeholder="0"
             />
+          </div>
+        </CardContent>
+      </Card>
+
+
+      {/* Financing Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Financing Details</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="down_payment">Down Payment (%)</Label>
+            <Input
+              id="down_payment"
+              type="number"
+              min="0"
+              max="100"
+              step="0.1"
+              value={formData.down_payment_percent || ''}
+              onChange={(e) => updateField('down_payment_percent', parseFloat(e.target.value) || 0)}
+              placeholder="20"
+            />
+            {errors.down_payment_percent && <p className="text-xs text-destructive">{errors.down_payment_percent}</p>}
+          </div>
+          <div className="space-y-2">
+            <Label>Down Payment Amount</Label>
+            <div className="p-3 bg-muted rounded-lg font-medium">
+              {formatCurrency(calculations.down_payment_amount)}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Loan Amount</Label>
+            <div className="p-3 bg-muted rounded-lg font-medium">
+              {formatCurrency(calculations.loan_amount)}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -287,11 +609,9 @@ export default function CostSheetForm() {
               <div className="p-3 bg-muted rounded-lg font-medium">
                 {formatCurrency(calculations.emi_amount)}
               </div>
-              {!isAdmin && (
-                <p className="text-xs text-muted-foreground">
-                  Interest Rate: {interestRate}% p.a.
-                </p>
-              )}
+              <p className="text-xs text-muted-foreground">
+                Interest Rate: {interestRate}% p.a.
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -302,7 +622,7 @@ export default function CostSheetForm() {
               <div className="p-3 bg-muted rounded-lg font-medium">
                 {formatCurrency(calculations.insurance_amount)}
               </div>
-              <p className="text-xs text-muted-foreground">3.5% of vehicle cost</p>
+              <p className="text-xs text-muted-foreground">{insuranceRate}% of vehicle cost</p>
             </div>
 
             <div className="space-y-2">
@@ -327,11 +647,12 @@ export default function CostSheetForm() {
         </CardContent>
       </Card>
 
+
       {/* Section B - Operational Costs */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
-            <span className="bg-primary text-primary-foreground px-2 py-0.5 rounded text-sm">B</span>
+            <span className="bg-secondary text-secondary-foreground px-2 py-0.5 rounded text-sm">B</span>
             Operational Costs
           </CardTitle>
         </CardHeader>
@@ -341,14 +662,15 @@ export default function CostSheetForm() {
             <h4 className="font-medium mb-3 text-muted-foreground">Usage & Fuel</h4>
             <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2">
-                <Label htmlFor="daily_km">Daily KM *</Label>
+                <Label htmlFor="monthly_km">Monthly KM *</Label>
                 <Input
-                  id="daily_km"
+                  id="monthly_km"
                   type="number"
                   min="1"
-                  value={formData.daily_km || ''}
-                  onChange={(e) => updateField('daily_km', parseFloat(e.target.value) || 0)}
+                  value={formData.monthly_km || ''}
+                  onChange={(e) => updateField('monthly_km', parseFloat(e.target.value) || 0)}
                 />
+                {errors.monthly_km && <p className="text-xs text-destructive">{errors.monthly_km}</p>}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="daily_hours">Daily Hours *</Label>
@@ -369,16 +691,18 @@ export default function CostSheetForm() {
                 <div className="p-3 bg-muted rounded-lg font-medium">
                   {formatCurrency(calculations.fuel_cost)}
                 </div>
-                {selectedVehicle && (
+                {selectedVehicle && selectedCity && (
                   <p className="text-xs text-muted-foreground">
-                    {formData.daily_km * 30} km/month @ {formatCurrency(currentFuelRate)}/{selectedVehicle.fuel_type === 'EV' ? 'kWh' : 'L'}
+                    {formData.monthly_km.toFixed(0)} km ÷ {selectedVehicle.mileage_km_per_unit} km/{selectedVehicle.fuel_type === 'EV' ? 'kWh' : 'L'} @ {formatCurrency(fuelRate)}/{selectedVehicle.fuel_type === 'EV' ? 'kWh' : 'L'} in {selectedCity}
                   </p>
                 )}
               </div>
             </div>
           </div>
 
+
           <Separator />
+
 
           {/* Driver Costs */}
           <div>
@@ -416,7 +740,9 @@ export default function CostSheetForm() {
             </div>
           </div>
 
+
           <Separator />
+
 
           {/* Other Costs */}
           <div>
@@ -475,14 +801,17 @@ export default function CostSheetForm() {
             </div>
           </div>
 
+
           <Separator />
 
-          <div className="flex justify-between items-center p-3 bg-primary/5 rounded-lg">
+
+          <div className="flex justify-between items-center p-3 bg-secondary/20 rounded-lg">
             <span className="font-medium">Subtotal B</span>
-            <span className="text-xl font-bold text-primary">{formatCurrency(calculations.subtotal_b)}</span>
+            <span className="text-xl font-bold text-secondary-foreground">{formatCurrency(calculations.subtotal_b)}</span>
           </div>
         </CardContent>
       </Card>
+
 
       {/* Admin Charges & Grand Total */}
       <Card className="border-primary/30">
@@ -503,7 +832,7 @@ export default function CostSheetForm() {
               <Separator />
               <div className="flex justify-between">
                 <span className="text-muted-foreground flex items-center gap-2">
-                  Admin Charges ({calculations.admin_charge_percent}%)
+                  Admin Charges ({calculations.admin_charge_percent.toFixed(1)}%)
                   <Lock className="w-3 h-3" />
                 </span>
                 <span className="font-medium">{formatCurrency(calculations.admin_charge_amount)}</span>
@@ -517,6 +846,7 @@ export default function CostSheetForm() {
         </CardContent>
       </Card>
 
+
       {/* Action Buttons */}
       <div className="flex flex-col gap-3 pb-6">
         {isEditing && (
@@ -525,15 +855,22 @@ export default function CostSheetForm() {
           </p>
         )}
         <div className="flex gap-3 justify-end">
-          <Button variant="outline" onClick={() => navigate('/cost-sheets')}>
+          <Button variant="outline" onClick={() => navigate('/cost-sheets')} disabled={loading}>
             Cancel
           </Button>
-          <Button variant="secondary" onClick={() => saveCostSheet('DRAFT')}>
+          <Button 
+            variant="secondary" 
+            onClick={() => saveCostSheet('DRAFT')}
+            disabled={loading || !user}
+          >
             <Save className="w-4 h-4 mr-2" />
             {isEditing ? 'Save Changes (Draft)' : 'Save as Draft'}
           </Button>
           {!isEditing && (
-            <Button onClick={() => saveCostSheet('PENDING_APPROVAL')}>
+            <Button 
+              onClick={() => saveCostSheet('PENDING_APPROVAL')}
+              disabled={loading || !user}
+            >
               <Send className="w-4 h-4 mr-2" />
               Submit for Approval
             </Button>
