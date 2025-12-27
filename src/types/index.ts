@@ -24,6 +24,7 @@ export interface Vehicle {
   variant_name: string;
   fuel_type: FuelType;
   mileage_km_per_unit: number;
+  maintenance_cost_per_km: number;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -198,6 +199,7 @@ export interface CalculatedFields {
 
   fuel_cost: number;
   total_driver_cost: number;
+  maintenance_cost: number;
   subtotal_b: number;
 
   admin_charge_percent: number;

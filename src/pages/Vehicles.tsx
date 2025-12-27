@@ -48,6 +48,7 @@ export default function Vehicles() {
     variant_name: '',
     fuel_type: 'PETROL' as FuelType,
     mileage_km_per_unit: '',
+    maintenance_cost_per_km: '',
   });
   const [loading, setLoading] = useState(true);
 
@@ -79,6 +80,7 @@ export default function Vehicles() {
       variant_name: '',
       fuel_type: 'PETROL',
       mileage_km_per_unit: '',
+      maintenance_cost_per_km: '',
     });
     setEditingVehicle(null);
   };
@@ -92,6 +94,7 @@ export default function Vehicles() {
         variant_name: vehicle.variant_name,
         fuel_type: vehicle.fuel_type,
         mileage_km_per_unit: vehicle.mileage_km_per_unit.toString(),
+        maintenance_cost_per_km: vehicle.maintenance_cost_per_km.toString(),
       });
     } else {
       resetForm();
@@ -108,17 +111,20 @@ export default function Vehicles() {
     }
 
     try {
+      const vehicleData = {
+        brand_name: formData.brand_name,
+        model_name: formData.model_name,
+        variant_name: formData.variant_name,
+        fuel_type: formData.fuel_type,
+        mileage_km_per_unit: parseFloat(formData.mileage_km_per_unit) || 0,
+        maintenance_cost_per_km: parseFloat(formData.maintenance_cost_per_km) || 0,
+      };
+
       if (editingVehicle) {
         // Update vehicle
         const { error } = await supabase
           .from('vehicles')
-          .update({
-            brand_name: formData.brand_name,
-            model_name: formData.model_name,
-            variant_name: formData.variant_name,
-            fuel_type: formData.fuel_type,
-            mileage_km_per_unit: parseFloat(formData.mileage_km_per_unit),
-          })
+          .update(vehicleData)
           .eq('id', editingVehicle.id);
         if (error) throw error;
         toast({ title: 'Vehicle updated successfully' });
@@ -126,13 +132,7 @@ export default function Vehicles() {
         // Add new vehicle
         const { error } = await supabase
           .from('vehicles')
-          .insert([{
-            brand_name: formData.brand_name,
-            model_name: formData.model_name,
-            variant_name: formData.variant_name,
-            fuel_type: formData.fuel_type,
-            mileage_km_per_unit: parseFloat(formData.mileage_km_per_unit),
-          }]);
+          .insert([vehicleData]);
         if (error) throw error;
         toast({ title: 'Vehicle added successfully' });
       }
@@ -172,6 +172,15 @@ export default function Vehicles() {
     }
   };
 
+  const formatCurrency = (amount: number): string => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  };
+
   if (loading) return <div className="text-center py-20 text-muted-foreground">Loading vehicles...</div>;
 
   return (
@@ -198,7 +207,7 @@ export default function Vehicles() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="brand">Brand Name</Label>
+                  <Label htmlFor="brand">Brand Name *</Label>
                   <Input
                     id="brand"
                     value={formData.brand_name}
@@ -208,7 +217,7 @@ export default function Vehicles() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="model">Model Name</Label>
+                  <Label htmlFor="model">Model Name *</Label>
                   <Input
                     id="model"
                     value={formData.model_name}
@@ -221,7 +230,7 @@ export default function Vehicles() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="variant">Variant Name</Label>
+                  <Label htmlFor="variant">Variant Name *</Label>
                   <Input
                     id="variant"
                     value={formData.variant_name}
@@ -231,7 +240,7 @@ export default function Vehicles() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="fuel">Fuel Type</Label>
+                  <Label htmlFor="fuel">Fuel Type *</Label>
                   <Select
                     value={formData.fuel_type}
                     onValueChange={(value: FuelType) => setFormData({ ...formData, fuel_type: value })}
@@ -248,21 +257,39 @@ export default function Vehicles() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="mileage">Mileage (km per unit)</Label>
-                <Input
-                  id="mileage"
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  value={formData.mileage_km_per_unit}
-                  onChange={(e) => setFormData({ ...formData, mileage_km_per_unit: e.target.value })}
-                  placeholder="12"
-                  required
-                />
-                <p className="text-xs text-muted-foreground">
-                  For EV: km per kWh, Others: km per litre
-                </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="mileage">Mileage (km per unit) *</Label>
+                  <Input
+                    id="mileage"
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={formData.mileage_km_per_unit}
+                    onChange={(e) => setFormData({ ...formData, mileage_km_per_unit: e.target.value })}
+                    placeholder="12"
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    For EV: km per kWh, Others: km per litre
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="maintenance">Maintenance Cost (₹/km) *</Label>
+                  <Input
+                    id="maintenance"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.maintenance_cost_per_km}
+                    onChange={(e) => setFormData({ ...formData, maintenance_cost_per_km: e.target.value })}
+                    placeholder="2.5"
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Cost per kilometer for maintenance
+                  </p>
+                </div>
               </div>
 
               <DialogFooter>
@@ -296,6 +323,7 @@ export default function Vehicles() {
                     <TableHead>Vehicle</TableHead>
                     <TableHead>Fuel Type</TableHead>
                     <TableHead>Mileage</TableHead>
+                    <TableHead>Maintenance</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -316,24 +344,32 @@ export default function Vehicles() {
                         {vehicle.mileage_km_per_unit} km/{vehicle.fuel_type === 'EV' ? 'kWh' : 'L'}
                       </TableCell>
                       <TableCell>
+                        <div className="text-sm">
+                          <span className="font-medium">{formatCurrency(vehicle.maintenance_cost_per_km)}</span>
+                          <span className="text-muted-foreground">/km</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
                         <Badge variant={vehicle.is_active ? 'default' : 'secondary'}>
                           {vehicle.is_active ? 'Active' : 'Inactive'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right flex justify-end gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(vehicle)}>
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        {isAdmin && (
-                          <>
-                            <Button variant="ghost" size="sm" onClick={() => handleToggleActive(vehicle)}>
-                              {vehicle.is_active ? 'Deactivate' : 'Activate'}
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleDelete(vehicle)}>
-                              <Trash2 className="w-4 h-4 text-destructive" />
-                            </Button>
-                          </>
-                        )}
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(vehicle)}>
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          {isAdmin && (
+                            <>
+                              <Button variant="ghost" size="sm" onClick={() => handleToggleActive(vehicle)}>
+                                {vehicle.is_active ? 'Deactivate' : 'Activate'}
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => handleDelete(vehicle)}>
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

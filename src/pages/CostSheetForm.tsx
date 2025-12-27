@@ -33,7 +33,6 @@ const formSchema = z.object({
   drivers_count: z.number().min(0),
   driver_salary_per_driver: z.number().min(0),
   parking_charges: z.number().min(0),
-  maintenance_cost: z.number().min(0),
   supervisor_cost: z.number().min(0),
   gps_camera_cost: z.number().min(0),
   permit_cost: z.number().min(0),
@@ -60,7 +59,7 @@ export default function CostSheetForm() {
     drivers_count: 1,
     driver_salary_per_driver: 15000,
     parking_charges: 0,
-    maintenance_cost: 0,
+    maintenance_cost: 0, // This will be auto-calculated
     supervisor_cost: 0,
     gps_camera_cost: 0,
     permit_cost: 0,
@@ -237,7 +236,7 @@ export default function CostSheetForm() {
           drivers_count: data.drivers_count,
           driver_salary_per_driver: data.driver_salary_per_driver,
           parking_charges: data.parking_charges,
-          maintenance_cost: data.maintenance_cost,
+          maintenance_cost: data.maintenance_cost, // Will be recalculated
           supervisor_cost: data.supervisor_cost,
           gps_camera_cost: data.gps_camera_cost,
           permit_cost: data.permit_cost,
@@ -250,7 +249,7 @@ export default function CostSheetForm() {
   };
 
 
-  // Synchronous calculation - NOW WORKS WITH useMemo
+  // Synchronous calculation with auto-calculated maintenance
   const calculations = useMemo(() => {
     if (!formData.vehicle_id) {
       return {
@@ -262,6 +261,7 @@ export default function CostSheetForm() {
         subtotal_a: 0,
         fuel_cost: 0,
         total_driver_cost: 0,
+        maintenance_cost: 0,
         subtotal_b: 0,
         admin_charge_percent: 0,
         admin_charge_amount: 0,
@@ -295,6 +295,11 @@ export default function CostSheetForm() {
     const fuel_cost = (formData.monthly_km / mileage) * fuelRate;
 
 
+    // AUTO-CALCULATED MAINTENANCE COST based on vehicle's maintenance_cost_per_km
+    const maintenance_cost_per_km = selectedVehicle?.maintenance_cost_per_km ?? 0;
+    const maintenance_cost = formData.monthly_km * maintenance_cost_per_km;
+
+
     // Driver cost
     const total_driver_cost = formData.drivers_count * formData.driver_salary_per_driver;
 
@@ -303,8 +308,8 @@ export default function CostSheetForm() {
     const subtotal_b =
       fuel_cost +
       total_driver_cost +
+      maintenance_cost +
       formData.parking_charges +
-      formData.maintenance_cost +
       formData.supervisor_cost +
       formData.gps_camera_cost +
       formData.permit_cost;
@@ -327,6 +332,7 @@ export default function CostSheetForm() {
       subtotal_a,
       fuel_cost,
       total_driver_cost,
+      maintenance_cost,
       subtotal_b,
       admin_charge_percent: adminChargePercent,
       admin_charge_amount,
@@ -395,7 +401,7 @@ export default function CostSheetForm() {
         driver_salary_per_driver: formData.driver_salary_per_driver,
         total_driver_cost: calculations.total_driver_cost,
         parking_charges: formData.parking_charges,
-        maintenance_cost: formData.maintenance_cost,
+        maintenance_cost: calculations.maintenance_cost, // AUTO-CALCULATED
         supervisor_cost: formData.supervisor_cost,
         gps_camera_cost: formData.gps_camera_cost,
         permit_cost: formData.permit_cost,
@@ -744,6 +750,31 @@ export default function CostSheetForm() {
           <Separator />
 
 
+          {/* Maintenance Cost - AUTO CALCULATED */}
+          <div>
+            <h4 className="font-medium mb-3 text-muted-foreground">Maintenance</h4>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  Monthly Maintenance Cost
+                  <Lock className="w-3 h-3 text-muted-foreground" />
+                </Label>
+                <div className="p-3 bg-muted rounded-lg font-medium">
+                  {formatCurrency(calculations.maintenance_cost)}
+                </div>
+                {selectedVehicle && (
+                  <p className="text-xs text-muted-foreground">
+                    {formData.monthly_km.toFixed(0)} km × {formatCurrency(selectedVehicle.maintenance_cost_per_km)}/km
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+
+          <Separator />
+
+
           {/* Other Costs */}
           <div>
             <h4 className="font-medium mb-3 text-muted-foreground">Other Monthly Costs</h4>
@@ -759,16 +790,6 @@ export default function CostSheetForm() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="maintenance">Maintenance Cost (₹)</Label>
-                <Input
-                  id="maintenance"
-                  type="number"
-                  min="0"
-                  value={formData.maintenance_cost || ''}
-                  onChange={(e) => updateField('maintenance_cost', parseFloat(e.target.value) || 0)}
-                />
-              </div>
-              <div className="space-y-2">
                 <Label htmlFor="supervisor">Supervisor Cost (₹)</Label>
                 <Input
                   id="supervisor"
@@ -779,7 +800,7 @@ export default function CostSheetForm() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="gps">GPS & Camera Cost (₹)</Label>
+                <Label htmlFor="gps">GPS & Accessories Cost (₹)</Label>
                 <Input
                   id="gps"
                   type="number"

@@ -1,7 +1,18 @@
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import type { CostSheet, Vehicle } from '@/types';
-import { formatCurrency } from './calculations';
+
+// Clean currency formatter that avoids special characters
+function cleanFormatCurrency(value: number): string {
+  const formatted = new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+  
+  // Remove currency symbol and clean up
+  return formatted.replace('₹', '').trim();
+}
 
 export function generateCostSheetPDF(
   costSheet: CostSheet,
@@ -11,389 +22,342 @@ export function generateCostSheetPDF(
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
 
-  // ============ MODERN COLOR PALETTE ============
-  const primaryBlue: [number, number, number] = [37, 99, 235];
-  const accentTeal: [number, number, number] = [20, 184, 166];
-  const darkText: [number, number, number] = [15, 23, 42];
-  const mediumGray: [number, number, number] = [71, 85, 105];
-  const lightGray: [number, number, number] = [241, 245, 249];
-  const successGreen: [number, number, number] = [34, 197, 94];
+  // Colors - Professional palette
+  const navy: [number, number, number] = [25, 42, 86];
+  const blue: [number, number, number] = [41, 98, 255];
+  const slate: [number, number, number] = [71, 85, 105];
+  const light: [number, number, number] = [249, 250, 251];
   const white: [number, number, number] = [255, 255, 255];
-  const borderGray: [number, number, number] = [203, 213, 225];
+  const green: [number, number, number] = [5, 150, 105];
+  const border: [number, number, number] = [209, 213, 219];
+  const gold: [number, number, number] = [217, 119, 6];
 
-  // ============ MODERN GRADIENT HEADER ============
-  doc.setFillColor(37, 99, 235);
-  doc.rect(0, 0, pageWidth, 55, 'F');
-  
-  doc.setFillColor(30, 80, 200, 0.3);
-  doc.circle(pageWidth - 20, 10, 40, 'F');
-  doc.circle(10, 45, 35, 'F');
+  let yPos = 20;
 
-  // Header content
+  // ============ HEADER ============
+  doc.setFillColor(...navy);
+  doc.rect(0, 0, pageWidth, 65, 'F');
+
+  // Company name (from)
+  doc.setTextColor(...gold);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.text('AUTORIDERS INTERNATIONAL LTD', pageWidth / 2, 15, { align: 'center' });
+
+  // Title
   doc.setTextColor(...white);
   doc.setFontSize(28);
   doc.setFont('helvetica', 'bold');
-  doc.text('VEHICLE COST SHEET', pageWidth / 2, 20, { align: 'center' });
-  
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  const refNumber = `REF: CS-${costSheet.id.slice(0, 8).toUpperCase()}`;
-  doc.text(refNumber, pageWidth / 2, 30, { align: 'center' });
-  
-  // Status badge
-  const statusX = pageWidth / 2;
-  const statusY = 38;
-  doc.setFillColor(...successGreen);
-  doc.roundedRect(statusX - 18, statusY, 36, 7, 2, 2, 'F');
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.text(costSheet.status.toUpperCase(), statusX, statusY + 5, { align: 'center' });
+  doc.text('COST PROPOSAL', pageWidth / 2, 28, { align: 'center' });
 
-  // ============ COMPANY & VEHICLE INFO CARD ============
-  let yPos = 65;
-  
-  // Info card with border
-  doc.setFillColor(...lightGray);
-  doc.setDrawColor(...borderGray);
-  doc.setLineWidth(0.5);
-  doc.roundedRect(15, yPos, pageWidth - 30, 45, 3, 3, 'FD');
-  
-  // Company name
-  doc.setTextColor(...darkText);
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text(costSheet.company_name, 22, yPos + 10);
-  
-  // Divider line
-  doc.setDrawColor(...borderGray);
-  doc.setLineWidth(0.3);
-  doc.line(22, yPos + 14, pageWidth - 22, yPos + 14);
-  
-  // Vehicle info - properly spaced
+  // Decorative line
+  doc.setDrawColor(...gold);
+  doc.setLineWidth(0.8);
+  doc.line(pageWidth / 2 - 35, 32, pageWidth / 2 + 35, 32);
+
+  // Prepared for
+  doc.setTextColor(...white);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...mediumGray);
-  
-  const vehicleName = vehicle
+  doc.text('Prepared for', pageWidth / 2, 40, { align: 'center' });
+
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text(costSheet.company_name, pageWidth / 2, 48, { align: 'center' });
+
+  const date = new Date().toLocaleDateString('en-IN', { 
+    day: 'numeric', 
+    month: 'long', 
+    year: 'numeric' 
+  });
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(200, 200, 200);
+  doc.text(date, pageWidth / 2, 54, { align: 'center' });
+
+  const refNum = `REF: ${costSheet.id.slice(0, 8).toUpperCase()}`;
+  doc.text(refNum, pageWidth / 2, 60, { align: 'center' });
+
+  yPos = 70;
+
+  // ============ VEHICLE DETAILS ============
+  doc.setFillColor(...light);
+  doc.setDrawColor(...border);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(20, yPos, pageWidth - 40, 38, 3, 3, 'FD');
+
+  doc.setTextColor(...navy);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Vehicle Details', 25, yPos + 8);
+
+  const vehicleInfo = vehicle
     ? `${vehicle.brand_name} ${vehicle.model_name} - ${vehicle.variant_name}`
     : 'Vehicle Not Specified';
-  
-  doc.text('Vehicle:', 22, yPos + 21);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...darkText);
-  doc.text(vehicleName, 40, yPos + 21);
-  
-  // Second row of info
+
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...mediumGray);
-  doc.text('Fuel Type:', 22, yPos + 28);
-  doc.setTextColor(...darkText);
-  doc.text(vehicle?.fuel_type || 'N/A', 40, yPos + 28);
+  doc.setTextColor(...slate);
   
-  doc.setTextColor(...mediumGray);
-  doc.text('Tenure:', 90, yPos + 28);
-  doc.setTextColor(...darkText);
-  doc.text(`${costSheet.tenure_years} years (${costSheet.tenure_months} months)`, 105, yPos + 28);
-  
-  // Third row of info
-  doc.setTextColor(...mediumGray);
-  doc.text('Mileage:', 22, yPos + 35);
-  doc.setTextColor(...darkText);
-  doc.text(`${vehicle?.mileage_km_per_unit || 'N/A'} km/L`, 40, yPos + 35);
-  
-  doc.setTextColor(...mediumGray);
-  doc.text('Date:', 90, yPos + 35);
-  doc.setTextColor(...darkText);
-  doc.text(new Date().toLocaleDateString('en-IN'), 105, yPos + 35);
+  const infoY = yPos + 17;
+  const col1X = 25;
+  const col2X = 110;
 
-  yPos += 55;
+  doc.text('Model:', col1X, infoY);
+  doc.setTextColor(...navy);
+  doc.text(vehicleInfo, col1X + 20, infoY);
 
-  // ============ SECTION A: FINANCE & REGISTRATION ============
-  doc.setFillColor(...primaryBlue);
-  doc.roundedRect(15, yPos, pageWidth - 30, 9, 2, 2, 'F');
+  doc.setTextColor(...slate);
+  doc.text('Fuel Type:', col1X, infoY + 7);
+  doc.setTextColor(...navy);
+  doc.text(vehicle?.fuel_type || 'N/A', col1X + 20, infoY + 7);
+
+  doc.setTextColor(...slate);
+  doc.text('Mileage:', col2X, infoY);
+  doc.setTextColor(...navy);
+  doc.text(`${vehicle?.mileage_km_per_unit || 'N/A'} km/L`, col2X + 20, infoY);
+
+  doc.setTextColor(...slate);
+  doc.text('Contract:', col2X, infoY + 7);
+  doc.setTextColor(...navy);
+  doc.text(`${costSheet.tenure_years} Years (${costSheet.tenure_months} Months)`, col2X + 20, infoY + 7);
+
+  yPos += 43;
+
+  // ============ SECTION 1: VEHICLE ACQUISITION ============
+  doc.setFillColor(...blue);
+  doc.roundedRect(20, yPos, pageWidth - 40, 8, 2, 2, 'F');
   doc.setTextColor(...white);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
-  doc.text('A. VEHICLE FINANCE & REGISTRATION', 20, yPos + 6.5);
+  doc.text('1. VEHICLE ACQUISITION & FINANCING', 25, yPos + 5.5);
+
+  yPos += 12;
+
+  // Table header
+  doc.setFillColor(...light);
+  doc.setDrawColor(...border);
+  doc.rect(20, yPos, pageWidth - 40, 8, 'FD');
   
-  yPos += 13;
-
-  autoTable(doc, {
-    startY: yPos,
-    head: [['Item', 'Details', 'Amount']],
-    body: [
-      ['Vehicle Cost', '', formatCurrency(costSheet.vehicle_cost)],
-      ['Down Payment', `${costSheet.down_payment_percent.toFixed(1)}%`, formatCurrency(costSheet.down_payment_amount)],
-      ['Loan Amount', '', formatCurrency(costSheet.loan_amount)],
-      ['Monthly EMI', `${costSheet.tenure_months} months`, formatCurrency(costSheet.emi_amount)],
-      ['Insurance (Monthly)', '', formatCurrency(costSheet.insurance_amount)],
-      ['Registration Charges', 'One-time', formatCurrency(costSheet.registration_charges)],
-    ],
-    foot: [['', 'Subtotal A', formatCurrency(costSheet.subtotal_a)]],
-    theme: 'striped',
-    headStyles: {
-      fillColor: [241, 245, 249],
-      textColor: darkText,
-      fontSize: 9,
-      fontStyle: 'bold',
-      halign: 'left',
-      cellPadding: { top: 6, right: 8, bottom: 6, left: 8 },
-      lineColor: borderGray,
-      lineWidth: 0.1,
-    },
-    footStyles: {
-      fillColor: [37, 99, 235],
-      textColor: white,
-      fontSize: 10,
-      fontStyle: 'bold',
-      cellPadding: { top: 7, right: 8, bottom: 7, left: 8 },
-    },
-    bodyStyles: {
-      fontSize: 9,
-      cellPadding: { top: 6, right: 8, bottom: 6, left: 8 },
-      textColor: darkText,
-      lineColor: borderGray,
-      lineWidth: 0.1,
-    },
-    alternateRowStyles: {
-      fillColor: [248, 250, 252],
-    },
-    columnStyles: {
-      0: { cellWidth: 70, halign: 'left', fontStyle: 'bold' },
-      1: { cellWidth: 45, halign: 'left', textColor: mediumGray },
-      2: { cellWidth: 65, halign: 'right', fontStyle: 'normal' },
-    },
-    margin: { left: 15, right: 15 },
-  });
-
-  // ============ PAGE BREAK BEFORE OPERATIONAL COSTS ============
-  doc.addPage();
-  yPos = 20;
-
-  // ============ SECTION B: OPERATIONAL COSTS ============
-  doc.setFillColor(...accentTeal);
-  doc.roundedRect(15, yPos, pageWidth - 30, 9, 2, 2, 'F');
-  doc.setTextColor(...white);
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.text('B. OPERATIONAL COSTS', 20, yPos + 6.5);
-  
-  yPos += 13;
-
-  // B.1 - Usage & Fuel
-  doc.setFillColor(248, 250, 252);
-  doc.setDrawColor(...borderGray);
-  doc.roundedRect(15, yPos, pageWidth - 30, 7, 1, 1, 'FD');
-  doc.setTextColor(...darkText);
+  doc.setTextColor(...navy);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
-  doc.text('B.1  Usage & Fuel Costs', 20, yPos + 5);
-  yPos += 11;
+  doc.text('Description', 25, yPos + 5.5);
+  doc.text('Amount', pageWidth - 25, yPos + 5.5, { align: 'right' });
 
-  autoTable(doc, {
-    startY: yPos,
-    body: [
-      ['Monthly Distance', `${costSheet.monthly_km} km`, ''],
-      ['Daily Operating Hours', `${costSheet.daily_hours} hours/day`, ''],
-      ['Monthly Fuel Cost', `@ ${vehicle?.mileage_km_per_unit || 'N/A'} km/L`, formatCurrency(costSheet.fuel_cost)],
-    ],
-    theme: 'plain',
-    bodyStyles: {
-      fontSize: 9,
-      cellPadding: { top: 5, right: 8, bottom: 5, left: 8 },
-      textColor: darkText,
-      lineColor: borderGray,
-      lineWidth: 0.1,
-    },
-    columnStyles: {
-      0: { cellWidth: 70, halign: 'left', fontStyle: 'bold' },
-      1: { cellWidth: 45, halign: 'left', textColor: mediumGray },
-      2: { cellWidth: 65, halign: 'right', fontStyle: 'normal' },
-    },
-    margin: { left: 20, right: 15 },
-  });
+  yPos += 8;
 
-  yPos = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+  // Table rows
+  const section1Data = [
+    ['Vehicle Ex-Showroom Cost', cleanFormatCurrency(costSheet.vehicle_cost)],
+    [`Down Payment (${costSheet.down_payment_percent.toFixed(1)}%)`, cleanFormatCurrency(costSheet.down_payment_amount)],
+    ['Financed Amount', cleanFormatCurrency(costSheet.loan_amount)],
+    [`Monthly EMI (${costSheet.tenure_months} months)`, cleanFormatCurrency(costSheet.emi_amount)],
+    ['Insurance (per month)', cleanFormatCurrency(costSheet.insurance_amount)],
+    ['Registration & Road Tax', cleanFormatCurrency(costSheet.registration_charges)],
+  ];
 
-  // B.2 - Driver Costs
-  doc.setFillColor(248, 250, 252);
-  doc.setDrawColor(...borderGray);
-  doc.roundedRect(15, yPos, pageWidth - 30, 7, 1, 1, 'FD');
-  doc.setTextColor(...darkText);
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  doc.text('B.2  Driver & Personnel Costs', 20, yPos + 5);
-  yPos += 11;
-
-  autoTable(doc, {
-    startY: yPos,
-    body: [
-      ['Number of Drivers', `${costSheet.drivers_count} driver(s)`, ''],
-      ['Salary per Driver', 'Monthly', formatCurrency(costSheet.driver_salary_per_driver)],
-      ['Total Driver Cost', '', formatCurrency(costSheet.total_driver_cost)],
-    ],
-    theme: 'plain',
-    bodyStyles: {
-      fontSize: 9,
-      cellPadding: { top: 5, right: 8, bottom: 5, left: 8 },
-      textColor: darkText,
-      lineColor: borderGray,
-      lineWidth: 0.1,
-    },
-    columnStyles: {
-      0: { cellWidth: 70, halign: 'left', fontStyle: 'bold' },
-      1: { cellWidth: 45, halign: 'left', textColor: mediumGray },
-      2: { cellWidth: 65, halign: 'right', fontStyle: 'normal' },
-    },
-    margin: { left: 20, right: 15 },
-  });
-
-  yPos = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
-
-  // B.3 - Other Monthly Costs
-  doc.setFillColor(248, 250, 252);
-  doc.setDrawColor(...borderGray);
-  doc.roundedRect(15, yPos, pageWidth - 30, 7, 1, 1, 'FD');
-  doc.setTextColor(...darkText);
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  doc.text('B.3  Other Monthly Expenses', 20, yPos + 5);
-  yPos += 11;
-
-  autoTable(doc, {
-    startY: yPos,
-    body: [
-      ['Parking Charges', '', formatCurrency(costSheet.parking_charges)],
-      ['Maintenance Cost', '', formatCurrency(costSheet.maintenance_cost)],
-      ['Supervisor Cost', '', formatCurrency(costSheet.supervisor_cost)],
-      ['GPS & Camera', '', formatCurrency(costSheet.gps_camera_cost)],
-      ['Permit Cost', '', formatCurrency(costSheet.permit_cost)],
-    ],
-    foot: [['', 'Subtotal B', formatCurrency(costSheet.subtotal_b)]],
-    theme: 'plain',
-    bodyStyles: {
-      fontSize: 9,
-      cellPadding: { top: 5, right: 8, bottom: 5, left: 8 },
-      textColor: darkText,
-      lineColor: borderGray,
-      lineWidth: 0.1,
-    },
-    footStyles: {
-      fillColor: [20, 184, 166],
-      textColor: white,
-      fontSize: 10,
-      fontStyle: 'bold',
-      cellPadding: { top: 7, right: 8, bottom: 7, left: 8 },
-    },
-    columnStyles: {
-      0: { cellWidth: 70, halign: 'left', fontStyle: 'bold' },
-      1: { cellWidth: 45, halign: 'left', textColor: mediumGray },
-      2: { cellWidth: 65, halign: 'right', fontStyle: 'normal' },
-    },
-    margin: { left: 20, right: 15 },
-  });
-
-  // ============ PAGE BREAK BEFORE SUMMARY ============
-  doc.addPage();
-  yPos = 20;
-
-  // ============ FINAL SUMMARY ============
-  doc.setFillColor(248, 250, 252);
-  doc.setDrawColor(...borderGray);
-  doc.roundedRect(15, yPos, pageWidth - 30, 9, 2, 2, 'FD');
-  doc.setTextColor(...darkText);
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.text('C. COST SUMMARY', 20, yPos + 6.5);
-  
-  yPos += 13;
-
-  autoTable(doc, {
-    startY: yPos,
-    body: [
-      ['Vehicle Finance & Registration', formatCurrency(costSheet.subtotal_a)],
-      ['Operational Costs', formatCurrency(costSheet.subtotal_b)],
-      ['Admin Charges (' + costSheet.admin_charge_percent.toFixed(1) + '%)', formatCurrency(costSheet.admin_charge_amount)],
-    ],
-    theme: 'striped',
-    bodyStyles: {
-      fontSize: 10,
-      cellPadding: { top: 6, right: 8, bottom: 6, left: 8 },
-      textColor: darkText,
-      lineColor: borderGray,
-      lineWidth: 0.1,
-    },
-    alternateRowStyles: {
-      fillColor: [248, 250, 252],
-    },
-    columnStyles: {
-      0: { cellWidth: 115, halign: 'left', fontStyle: 'bold' },
-      1: { cellWidth: 65, halign: 'right', fontStyle: 'normal' },
-    },
-    margin: { left: 15, right: 15 },
-  });
-
-  yPos = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
-
-  // ============ GRAND TOTAL - MODERN CARD ============
-  const totalBoxHeight = 32;
-  
-  // Shadow effect
-  doc.setFillColor(0, 0, 0, 0.08);
-  doc.roundedRect(16.5, yPos + 1.5, pageWidth - 33, totalBoxHeight, 4, 4, 'F');
-  
-  // Main gradient box with border
-  doc.setFillColor(37, 99, 235);
-  doc.setDrawColor(30, 80, 200);
-  doc.setLineWidth(0.5);
-  doc.roundedRect(15, yPos, pageWidth - 30, totalBoxHeight, 4, 4, 'FD');
-  
-  // Accent stripe
-  doc.setFillColor(20, 184, 166);
-  doc.roundedRect(15, yPos, 6, totalBoxHeight, 4, 4, 'F');
-  
-  doc.setTextColor(...white);
-  doc.setFontSize(11);
   doc.setFont('helvetica', 'normal');
-  doc.text('TOTAL MONTHLY COST', 27, yPos + 12);
-  
-  doc.setFontSize(24);
+  doc.setFontSize(9.5);
+
+  section1Data.forEach((row, index) => {
+    const rowY = yPos + (index * 8);
+    
+    if (index % 2 === 0) {
+      doc.setFillColor(248, 250, 252);
+      doc.rect(20, rowY, pageWidth - 40, 8, 'F');
+    }
+    
+    doc.setDrawColor(...border);
+    doc.line(20, rowY, pageWidth - 20, rowY);
+    
+    doc.setTextColor(...navy);
+    doc.text(row[0], 25, rowY + 5.5);
+    doc.text(row[1], pageWidth - 25, rowY + 5.5, { align: 'right' });
+  });
+
+  yPos += section1Data.length * 8;
+
+  // Section total
+  doc.setFillColor(...blue);
+  doc.rect(20, yPos, pageWidth - 40, 10, 'F');
+  doc.setTextColor(...white);
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.text(formatCurrency(costSheet.grand_total), pageWidth - 25, yPos + 21, { align: 'right' });
+  doc.text('Section Total', 25, yPos + 6.5);
+  doc.text(cleanFormatCurrency(costSheet.subtotal_a), pageWidth - 25, yPos + 6.5, { align: 'right' });
+
+  yPos += 15;
+
+  // ============ SECTION 2: OPERATIONAL COSTS ============
+  doc.setFillColor(...blue);
+  doc.roundedRect(20, yPos, pageWidth - 40, 8, 2, 2, 'F');
+  doc.setTextColor(...white);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('2. MONTHLY OPERATIONAL COSTS', 25, yPos + 5.5);
+
+  yPos += 12;
+
+  // Usage info
+  doc.setFillColor(...light);
+  doc.rect(20, yPos, pageWidth - 40, 16, 'F');
+  
+  doc.setTextColor(...slate);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Expected Monthly Distance', 25, yPos + 5);
+  doc.text(`${costSheet.monthly_km.toLocaleString()} km`, pageWidth - 25, yPos + 5, { align: 'right' });
+  
+  doc.text('Daily Operating Hours', 25, yPos + 11);
+  doc.text(`${costSheet.daily_hours} hours`, pageWidth - 25, yPos + 11, { align: 'right' });
+
+  yPos += 20;
+
+  // Operational costs table header
+  doc.setFillColor(...light);
+  doc.setDrawColor(...border);
+  doc.rect(20, yPos, pageWidth - 40, 8, 'FD');
+  
+  doc.setTextColor(...navy);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Description', 25, yPos + 5.5);
+  doc.text('Amount', pageWidth - 25, yPos + 5.5, { align: 'right' });
+
+  yPos += 8;
+
+  // Build operational costs array
+  const operationalData: Array<[string, string]> = [
+    ['Fuel Cost', cleanFormatCurrency(costSheet.fuel_cost)],
+    [`Driver Salaries (${costSheet.drivers_count} driver${costSheet.drivers_count > 1 ? 's' : ''})`, cleanFormatCurrency(costSheet.total_driver_cost)],
+  ];
+
+  if (costSheet.parking_charges > 0) {
+    operationalData.push(['Parking Charges', cleanFormatCurrency(costSheet.parking_charges)]);
+  }
+  if (costSheet.maintenance_cost > 0) {
+    operationalData.push(['Maintenance & Servicing', cleanFormatCurrency(costSheet.maintenance_cost)]);
+  }
+  if (costSheet.supervisor_cost > 0) {
+    operationalData.push(['Supervisor/Management', cleanFormatCurrency(costSheet.supervisor_cost)]);
+  }
+  if (costSheet.gps_camera_cost > 0) {
+    operationalData.push(['GPS & Telematics', cleanFormatCurrency(costSheet.gps_camera_cost)]);
+  }
+  if (costSheet.permit_cost > 0) {
+    operationalData.push(['Permits & Documentation', cleanFormatCurrency(costSheet.permit_cost)]);
+  }
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9.5);
+
+  operationalData.forEach((row, index) => {
+    const rowY = yPos + (index * 8);
+    
+    if (index % 2 === 0) {
+      doc.setFillColor(248, 250, 252);
+      doc.rect(20, rowY, pageWidth - 40, 8, 'F');
+    }
+    
+    doc.setDrawColor(...border);
+    doc.line(20, rowY, pageWidth - 20, rowY);
+    
+    doc.setTextColor(...navy);
+    doc.text(row[0], 25, rowY + 5.5);
+    doc.text(row[1], pageWidth - 25, rowY + 5.5, { align: 'right' });
+  });
+
+  yPos += operationalData.length * 8;
+
+  // Section total
+  doc.setFillColor(...blue);
+  doc.rect(20, yPos, pageWidth - 40, 10, 'F');
+  doc.setTextColor(...white);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Section Total', 25, yPos + 6.5);
+  doc.text(cleanFormatCurrency(costSheet.subtotal_b), pageWidth - 25, yPos + 6.5, { align: 'right' });
+
+  // Check if we need a new page
+  if (yPos > pageHeight - 100) {
+    doc.addPage();
+    yPos = 10;
+  }
+
+  // ============ SECTION 3: COST SUMMARY ============
+  doc.setFillColor(...navy);
+  doc.roundedRect(20, yPos, pageWidth - 40, 8, 2, 2, 'F');
+  doc.setTextColor(...white);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('3. COST SUMMARY', 25, yPos + 5.5);
+
+  yPos += 12;
+
+  const summaryData = [
+    ['Vehicle Acquisition & Financing', cleanFormatCurrency(costSheet.subtotal_a)],
+    ['Monthly Operational Costs', cleanFormatCurrency(costSheet.subtotal_b)],
+    [`Administrative Charges (${costSheet.admin_charge_percent.toFixed(1)}%)`, cleanFormatCurrency(costSheet.admin_charge_amount)],
+  ];
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+
+  summaryData.forEach((row, index) => {
+    const rowY = yPos + (index * 9);
+    
+    if (index % 2 === 0) {
+      doc.setFillColor(248, 250, 252);
+      doc.rect(20, rowY, pageWidth - 40, 9, 'F');
+    }
+    
+    doc.setDrawColor(...border);
+    doc.line(20, rowY, pageWidth - 20, rowY);
+    
+    doc.setTextColor(...navy);
+    doc.text(row[0], 25, rowY + 6);
+    doc.text(row[1], pageWidth - 25, rowY + 6, { align: 'right' });
+  });
+
+  yPos += summaryData.length * 9 + 15;
+
+  // ============ GRAND TOTAL ============
+  const boxHeight = 28;
+  
+  // Shadow
+  doc.setFillColor(0, 0, 0, 0.1);
+  doc.roundedRect(21, yPos + 1, pageWidth - 42, boxHeight, 3, 3, 'F');
+  
+  // Main box
+  doc.setFillColor(...green);
+  doc.roundedRect(20, yPos, pageWidth - 40, boxHeight, 3, 3, 'F');
+  
+  doc.setTextColor(...white);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
+  doc.text('TOTAL MONTHLY COST', 28, yPos + 10);
+  
+  doc.setFontSize(22);
+  doc.setFont('helvetica', 'bold');
+  doc.text(cleanFormatCurrency(costSheet.grand_total), pageWidth - 28, yPos + 18, { align: 'right' });
 
   // ============ FOOTER ============
-  const footerY = pageHeight - 18;
+  const footerY = pageHeight - 20;
   
-  doc.setDrawColor(...borderGray);
-  doc.setLineWidth(0.5);
-  doc.line(15, footerY - 6, pageWidth - 15, footerY - 6);
+  doc.setDrawColor(...border);
+  doc.setLineWidth(0.3);
+  doc.line(20, footerY - 5, pageWidth - 20, footerY - 5);
   
-  doc.setTextColor(...mediumGray);
+  doc.setTextColor(...slate);
   doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
-  doc.text('This is an official computer-generated document.', 15, footerY);
-  doc.text('No signature required.', 15, footerY + 4);
-  
   doc.setFont('helvetica', 'italic');
-  doc.text(
-    `Generated: ${new Date().toLocaleString('en-IN', { 
-      day: '2-digit', 
-      month: '2-digit', 
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    })}`,
-    pageWidth - 15,
-    footerY + 2,
-    { align: 'right' }
-  );
+  doc.text('This proposal is valid for 30 days from the date of issue.', pageWidth / 2, footerY, { align: 'center' });
+  
+  doc.setFontSize(7);
+  doc.text(`Generated on ${new Date().toLocaleString('en-IN')}`, pageWidth / 2, footerY + 5, { align: 'center' });
 
   // ============ SAVE PDF ============
-  const filename = `CostSheet_${costSheet.company_name.replace(
-    /[^a-zA-Z0-9]/g,
-    '_'
-  )}_${new Date().toISOString().split('T')[0]}.pdf`;
-
+  const filename = `Cost_Proposal_${costSheet.company_name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
   doc.save(filename);
 }

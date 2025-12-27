@@ -325,7 +325,7 @@ export default function CostSheetDetail() {
                 <DetailRow label="Parking Charges" value={formatCurrency(costSheet.parking_charges)} />
                 <DetailRow label="Maintenance Cost" value={formatCurrency(costSheet.maintenance_cost)} />
                 <DetailRow label="Supervisor Cost" value={formatCurrency(costSheet.supervisor_cost)} />
-                <DetailRow label="GPS & Camera Cost" value={formatCurrency(costSheet.gps_camera_cost)} />
+                <DetailRow label="GPS & Accessories Cost" value={formatCurrency(costSheet.gps_camera_cost)} />
                 <DetailRow label="Permit Cost" value={formatCurrency(costSheet.permit_cost)} />
               </div>
             </div>

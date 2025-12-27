@@ -140,7 +140,7 @@ export async function calculateCostSheet(
   );
 
   // ----------------------
-  // Insurance (on full vehicle cost, monthly)
+  // Insurance (monthly)
   // ----------------------
   const insurance_amount =
     (formData.vehicle_cost * (insuranceRate / 100)) / 12;
@@ -165,13 +165,19 @@ export async function calculateCostSheet(
     formData.drivers_count * formData.driver_salary_per_driver;
 
   // ----------------------
+  // Maintenance (AUTO from vehicle)
+  // ----------------------
+  const maintenance_cost =
+    (vehicle?.maintenance_cost_per_km ?? 0) * formData.monthly_km;
+
+  // ----------------------
   // Subtotal B
   // ----------------------
   const subtotal_b =
     fuel_cost +
     total_driver_cost +
+    maintenance_cost +
     formData.parking_charges +
-    formData.maintenance_cost +
     formData.supervisor_cost +
     formData.gps_camera_cost +
     formData.permit_cost;
@@ -200,6 +206,7 @@ export async function calculateCostSheet(
 
     fuel_cost,
     total_driver_cost,
+    maintenance_cost,
     subtotal_b,
 
     admin_charge_percent: adminChargePercent,
