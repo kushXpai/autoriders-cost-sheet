@@ -267,7 +267,7 @@ export default function CostSheetDetail() {
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 md:grid-cols-1">
-            <DetailRow label="Vehicle Cost" value={formatCurrency(costSheet.vehicle_cost)} />
+            <DetailRow label="Vehicle Cost" value={formatCurrency(costSheet.on_road_price)} />
             <DetailRow label="Down Payment %" value={`${costSheet.down_payment_percent.toFixed(1)}%`} />
             <DetailRow label="Down Payment Amount" value={formatCurrency(costSheet.down_payment_amount)} />
             <DetailRow label="Loan Amount" value={formatCurrency(costSheet.loan_amount)} />

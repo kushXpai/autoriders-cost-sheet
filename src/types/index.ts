@@ -103,7 +103,11 @@ export interface CostSheet {
   tenure_years: number;
   tenure_months: number;
 
-  vehicle_cost: number;
+  // CHANGED: Added new fields for ex-showroom and on-road
+  ex_showroom_price: number;
+  insurance_amount: number;
+  registration_charges: number;
+  on_road_price: number;
 
   down_payment_percent: number;
   down_payment_amount: number;
@@ -111,8 +115,6 @@ export interface CostSheet {
 
   emi_amount: number;
 
-  insurance_amount: number;
-  registration_charges: number;
   subtotal_a: number;
 
   monthly_km: number;
@@ -157,7 +159,8 @@ export interface CostSheetFormData {
 
   tenure_years: number;
 
-  vehicle_cost: number;
+  // CHANGED: Renamed from vehicle_cost to ex_showroom_price
+  ex_showroom_price: number;
 
   down_payment_percent: number;
 
@@ -176,25 +179,18 @@ export interface CostSheetFormData {
   permit_cost: number;
 }
 
-// Auth Context Types
-export interface AuthContextType {
-  user: User | null;
-  login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
-  isAdmin: boolean;
-  isSuperAdmin: boolean;
-  isAuthenticated: boolean;
-}
-
 // Calculated fields returned by calculateCostSheet
 export interface CalculatedFields {
   tenure_months: number;
+
+  // CHANGED: Added new calculated fields
+  insurance_amount: number;
+  on_road_price: number;
 
   down_payment_amount: number;
   loan_amount: number;
 
   emi_amount: number;
-  insurance_amount: number;
   subtotal_a: number;
 
   fuel_cost: number;
@@ -206,4 +202,14 @@ export interface CalculatedFields {
   admin_charge_amount: number;
 
   grand_total: number;
+}
+
+// Auth Context Types
+export interface AuthContextType {
+  user: User | null;
+  login: (email: string, password: string) => Promise<boolean>;
+  logout: () => void;
+  isAdmin: boolean;
+  isSuperAdmin: boolean;
+  isAuthenticated: boolean;
 }

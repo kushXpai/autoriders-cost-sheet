@@ -125,13 +125,27 @@ export async function calculateCostSheet(
   const tenure_months = formData.tenure_years * 12;
 
   // ----------------------
-  // Financing
+  // Insurance & On-Road Price (CHANGED)
+  // ----------------------
+  // Insurance calculated on ex-showroom price (annual, then converted to monthly for subtotal_a)
+  const insurance_amount_annual =
+    formData.ex_showroom_price * (insuranceRate / 100);
+  
+  const insurance_amount = insurance_amount_annual / 12; // Monthly insurance for subtotal_a
+
+  // On-road price = ex-showroom + annual insurance + registration
+  const on_road_price =
+    formData.ex_showroom_price +
+    insurance_amount_annual +
+    formData.registration_charges;
+
+  // ----------------------
+  // Financing (CHANGED - now based on on_road_price)
   // ----------------------
   const down_payment_amount =
-    formData.vehicle_cost * (formData.down_payment_percent / 100);
+    on_road_price * (formData.down_payment_percent / 100);
 
-  const loan_amount =
-    formData.vehicle_cost - down_payment_amount;
+  const loan_amount = on_road_price - down_payment_amount;
 
   const emi_amount = calculateEMI(
     loan_amount,
@@ -140,15 +154,9 @@ export async function calculateCostSheet(
   );
 
   // ----------------------
-  // Insurance (monthly)
+  // Subtotal A
   // ----------------------
-  const insurance_amount =
-    (formData.vehicle_cost * (insuranceRate / 100)) / 12;
-
-  const subtotal_a =
-    emi_amount +
-    insurance_amount +
-    formData.registration_charges;
+  const subtotal_a = emi_amount;
 
   // ----------------------
   // Fuel
@@ -197,11 +205,13 @@ export async function calculateCostSheet(
   return {
     tenure_months,
 
+    insurance_amount,
+    on_road_price,
+
     down_payment_amount,
     loan_amount,
 
     emi_amount,
-    insurance_amount,
     subtotal_a,
 
     fuel_cost,

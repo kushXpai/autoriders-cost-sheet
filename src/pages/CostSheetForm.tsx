@@ -25,7 +25,7 @@ const formSchema = z.object({
   company_name: z.string().min(1, 'Company name is required').max(200),
   vehicle_id: z.string().min(1, 'Please select a vehicle'),
   tenure_years: z.number().min(1, 'Minimum 1 year').max(10, 'Maximum 10 years'),
-  vehicle_cost: z.number().min(1, 'Vehicle cost is required'),
+  ex_showroom_price: z.number().min(1, 'Ex-showroom price is required'),  // CHANGED from vehicle_cost
   down_payment_percent: z.number().min(0, 'Minimum 0%').max(100, 'Maximum 100%'),
   registration_charges: z.number().min(0),
   monthly_km: z.number().min(1, 'Monthly km is required'),
@@ -51,7 +51,7 @@ export default function CostSheetForm() {
     company_name: '',
     vehicle_id: '',
     tenure_years: 3,
-    vehicle_cost: 0,
+    ex_showroom_price: 0,  // CHANGED from vehicle_cost
     down_payment_percent: 20,
     registration_charges: 0,
     monthly_km: 3000,
@@ -59,7 +59,7 @@ export default function CostSheetForm() {
     drivers_count: 1,
     driver_salary_per_driver: 15000,
     parking_charges: 0,
-    maintenance_cost: 0, // This will be auto-calculated
+    maintenance_cost: 0,
     supervisor_cost: 0,
     gps_camera_cost: 0,
     permit_cost: 0,
@@ -72,7 +72,7 @@ export default function CostSheetForm() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  
+
   // Dynamic rates from Supabase
   const [interestRate, setInterestRate] = useState(12);
   const [adminChargePercent, setAdminChargePercent] = useState(0);
@@ -158,7 +158,7 @@ export default function CostSheetForm() {
         .order('effective_from', { ascending: false })
         .limit(1)
         .single();
-      
+
       if (irData) setInterestRate(irData.interest_rate_percent);
 
 
@@ -170,7 +170,7 @@ export default function CostSheetForm() {
         .order('effective_from', { ascending: false })
         .limit(1)
         .single();
-      
+
       if (acData) setAdminChargePercent(acData.admin_charge_percent);
 
 
@@ -182,7 +182,7 @@ export default function CostSheetForm() {
         .order('effective_from', { ascending: false })
         .limit(1)
         .single();
-      
+
       if (insData) setInsuranceRate(insData.insurance_rate_percent);
     } catch (error: any) {
       console.error('Error fetching dynamic rates:', error);
@@ -219,24 +219,22 @@ export default function CostSheetForm() {
         .eq('id', costSheetId)
         .single();
 
-
       if (error) throw error;
-
 
       if (data) {
         setFormData({
           company_name: data.company_name,
           vehicle_id: data.vehicle_id,
           tenure_years: data.tenure_years,
-          vehicle_cost: data.vehicle_cost,
-          down_payment_percent: (data.down_payment_amount / data.vehicle_cost) * 100,
+          ex_showroom_price: data.ex_showroom_price,  // CHANGED from vehicle_cost
+          down_payment_percent: (data.down_payment_amount / data.on_road_price) * 100,  // CHANGED from vehicle_cost
           registration_charges: data.registration_charges,
           monthly_km: data.monthly_km,
           daily_hours: data.daily_hours,
           drivers_count: data.drivers_count,
           driver_salary_per_driver: data.driver_salary_per_driver,
           parking_charges: data.parking_charges,
-          maintenance_cost: data.maintenance_cost, // Will be recalculated
+          maintenance_cost: data.maintenance_cost,
           supervisor_cost: data.supervisor_cost,
           gps_camera_cost: data.gps_camera_cost,
           permit_cost: data.permit_cost,
@@ -254,10 +252,11 @@ export default function CostSheetForm() {
     if (!formData.vehicle_id) {
       return {
         tenure_months: 0,
+        insurance_amount: 0,
+        on_road_price: 0,
         down_payment_amount: 0,
         loan_amount: 0,
         emi_amount: 0,
-        insurance_amount: 0,
         subtotal_a: 0,
         fuel_cost: 0,
         total_driver_cost: 0,
@@ -269,40 +268,44 @@ export default function CostSheetForm() {
       };
     }
 
-
     const tenure_months = formData.tenure_years * 12;
-    const down_payment_amount = formData.vehicle_cost * (formData.down_payment_percent / 100);
-    const loan_amount = formData.vehicle_cost - down_payment_amount;
 
+    // Insurance calculated on ex-showroom price (annual, then monthly)
+    const insurance_amount_annual = formData.ex_showroom_price * (insuranceRate / 100);
+    const insurance_amount = insurance_amount_annual / 12;
 
-    // EMI calculation (reducing balance)
+    // On-road price = ex-showroom + annual insurance + registration
+    const on_road_price =
+      formData.ex_showroom_price +
+      insurance_amount_annual +
+      formData.registration_charges;
+
+    // Down payment and loan based on on-road price
+    const down_payment_amount = on_road_price * (formData.down_payment_percent / 100);
+    const loan_amount = on_road_price - down_payment_amount;
+
+    // EMI calculation (reducing balance) on loan amount
     const monthlyRate = interestRate / 100 / 12;
     const n = tenure_months;
     const emi_amount =
       monthlyRate <= 0
         ? loan_amount / tenure_months
         : (loan_amount * monthlyRate * Math.pow(1 + monthlyRate, n)) /
-          (Math.pow(1 + monthlyRate, n) - 1);
+        (Math.pow(1 + monthlyRate, n) - 1);
 
-
-    const insurance_amount = (formData.vehicle_cost * (insuranceRate / 100)) / 12;
-    const subtotal_a = emi_amount + insurance_amount + formData.registration_charges;
-
+    const subtotal_a = emi_amount;
 
     // Fuel cost calculation using vehicle mileage and city-based fuel rate
     const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id);
     const mileage = selectedVehicle?.mileage_km_per_unit ?? 25;
     const fuel_cost = (formData.monthly_km / mileage) * fuelRate;
 
-
     // AUTO-CALCULATED MAINTENANCE COST based on vehicle's maintenance_cost_per_km
     const maintenance_cost_per_km = selectedVehicle?.maintenance_cost_per_km ?? 0;
     const maintenance_cost = formData.monthly_km * maintenance_cost_per_km;
 
-
     // Driver cost
     const total_driver_cost = formData.drivers_count * formData.driver_salary_per_driver;
-
 
     // Subtotal B
     const subtotal_b =
@@ -314,21 +317,19 @@ export default function CostSheetForm() {
       formData.gps_camera_cost +
       formData.permit_cost;
 
-
     // Admin charge
     const admin_charge_amount = (subtotal_a + subtotal_b) * (adminChargePercent / 100);
-
 
     // Grand total
     const grand_total = subtotal_a + subtotal_b + admin_charge_amount;
 
-
     return {
       tenure_months,
+      insurance_amount,
+      on_road_price,
       down_payment_amount,
       loan_amount,
       emi_amount,
-      insurance_amount,
       subtotal_a,
       fuel_cost,
       total_driver_cost,
@@ -367,32 +368,30 @@ export default function CostSheetForm() {
     }
   };
 
-
   const saveCostSheet = async (status: CostSheetStatus) => {
     if (!validateForm() || !user) {
       toast({ title: 'Please fix the errors', variant: 'destructive' });
       return;
     }
 
-
     setLoading(true);
     try {
       const now = new Date().toISOString();
       const finalStatus = isEditing ? 'DRAFT' : status;
-
 
       const costSheetData: Omit<CostSheet, 'id' | 'created_at' | 'updated_at'> = {
         company_name: formData.company_name.trim(),
         vehicle_id: formData.vehicle_id,
         tenure_years: formData.tenure_years,
         tenure_months: calculations.tenure_months,
-        vehicle_cost: formData.vehicle_cost,
+        ex_showroom_price: formData.ex_showroom_price,  // CHANGED from vehicle_cost
+        insurance_amount: calculations.insurance_amount,
+        registration_charges: formData.registration_charges,
+        on_road_price: calculations.on_road_price,  // ADDED
         down_payment_percent: formData.down_payment_percent,
         down_payment_amount: calculations.down_payment_amount,
         loan_amount: calculations.loan_amount,
         emi_amount: calculations.emi_amount,
-        insurance_amount: calculations.insurance_amount,
-        registration_charges: formData.registration_charges,
         subtotal_a: calculations.subtotal_a,
         monthly_km: formData.monthly_km,
         daily_hours: formData.daily_hours,
@@ -401,7 +400,7 @@ export default function CostSheetForm() {
         driver_salary_per_driver: formData.driver_salary_per_driver,
         total_driver_cost: calculations.total_driver_cost,
         parking_charges: formData.parking_charges,
-        maintenance_cost: calculations.maintenance_cost, // AUTO-CALCULATED
+        maintenance_cost: calculations.maintenance_cost,
         supervisor_cost: formData.supervisor_cost,
         gps_camera_cost: formData.gps_camera_cost,
         permit_cost: formData.permit_cost,
@@ -417,7 +416,6 @@ export default function CostSheetForm() {
         pdf_url: null,
         created_by: user.id,
       };
-
 
       let result;
       if (isEditing) {
@@ -435,32 +433,29 @@ export default function CostSheetForm() {
           .single();
       }
 
-
       if (result.error) {
         throw result.error;
       }
 
-
-      toast({ 
-        title: isEditing 
-          ? 'Cost sheet updated and set to draft. Submit for approval when ready.' 
-          : status === 'DRAFT' 
-            ? 'Cost sheet saved as draft' 
-            : 'Cost sheet submitted for approval' 
+      toast({
+        title: isEditing
+          ? 'Cost sheet updated and set to draft. Submit for approval when ready.'
+          : status === 'DRAFT'
+            ? 'Cost sheet saved as draft'
+            : 'Cost sheet submitted for approval'
       });
       navigate('/cost-sheets');
     } catch (error: any) {
       console.error('Error saving cost sheet:', error);
-      toast({ 
-        title: 'Failed to save cost sheet', 
+      toast({
+        title: 'Failed to save cost sheet',
         description: error.message,
-        variant: 'destructive' 
+        variant: 'destructive'
       });
     } finally {
       setLoading(false);
     }
   };
-
 
   return (
     <div className="space-y-6 animate-fade-in max-w-4xl mx-auto">
@@ -532,7 +527,6 @@ export default function CostSheetForm() {
             {errors.vehicle_id && <p className="text-xs text-destructive">{errors.vehicle_id}</p>}
           </div>
 
-
           <div className="space-y-2">
             <Label htmlFor="tenure">Tenure (Years) *</Label>
             <Input
@@ -546,26 +540,72 @@ export default function CostSheetForm() {
             <p className="text-xs text-muted-foreground">= {calculations.tenure_months} months</p>
           </div>
 
-
           <div className="space-y-2">
-            <Label htmlFor="vehicle_cost">Vehicle Cost (₹) *</Label>
+            <Label htmlFor="ex_showroom_price">Ex-Showroom Price (₹) *</Label>
             <Input
-              id="vehicle_cost"
+              id="ex_showroom_price"
               type="number"
               min="0"
-              value={formData.vehicle_cost || ''}
-              onChange={(e) => updateField('vehicle_cost', parseFloat(e.target.value) || 0)}
+              value={formData.ex_showroom_price || ''}
+              onChange={(e) => updateField('ex_showroom_price', parseFloat(e.target.value) || 0)}
               placeholder="0"
             />
+            {errors.ex_showroom_price && <p className="text-xs text-destructive">{errors.ex_showroom_price}</p>}
           </div>
         </CardContent>
       </Card>
 
+      {/* Insurance & On-Road Price Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Insurance & On-Road Price</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              Annual Insurance
+              <Lock className="w-3 h-3 text-muted-foreground" />
+            </Label>
+            <div className="p-3 bg-muted rounded-lg font-medium">
+              {formatCurrency(calculations.insurance_amount * 12)}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {insuranceRate}% of ex-showroom price
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="registration">Registration Charges (₹) *</Label>
+            <Input
+              id="registration"
+              type="number"
+              min="0"
+              value={formData.registration_charges || ''}
+              onChange={(e) => updateField('registration_charges', parseFloat(e.target.value) || 0)}
+              placeholder="0"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              On-Road Price
+              <Lock className="w-3 h-3 text-muted-foreground" />
+            </Label>
+            <div className="p-3 bg-primary/10 rounded-lg font-medium text-primary">
+              {formatCurrency(calculations.on_road_price)}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Ex-showroom + Insurance + Registration
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Financing Section */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Financing Details</CardTitle>
+          <CardDescription>Based on on-road price</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
@@ -581,6 +621,9 @@ export default function CostSheetForm() {
               placeholder="20"
             />
             {errors.down_payment_percent && <p className="text-xs text-destructive">{errors.down_payment_percent}</p>}
+            <p className="text-xs text-muted-foreground">
+              On {formatCurrency(calculations.on_road_price)}
+            </p>
           </div>
           <div className="space-y-2">
             <Label>Down Payment Amount</Label>
@@ -602,63 +645,42 @@ export default function CostSheetForm() {
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <span className="bg-primary text-primary-foreground px-2 py-0.5 rounded text-sm">A</span>
-            Vehicle Finance & Registration
+            Vehicle Finance Costs
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                EMI Amount (Monthly)
-                <Lock className="w-3 h-3 text-muted-foreground" />
-              </Label>
-              <div className="p-3 bg-muted rounded-lg font-medium">
-                {formatCurrency(calculations.emi_amount)}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Interest Rate: {interestRate}% p.a.
-              </p>
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              EMI Amount
+              <Lock className="w-3 h-3 text-muted-foreground" />
+            </Label>
+            <div className="p-3 bg-muted rounded-lg font-medium text-lg">
+              {formatCurrency(calculations.emi_amount)}
             </div>
-
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                Insurance Amount
-                <Lock className="w-3 h-3 text-muted-foreground" />
-              </Label>
-              <div className="p-3 bg-muted rounded-lg font-medium">
-                {formatCurrency(calculations.insurance_amount)}
-              </div>
-              <p className="text-xs text-muted-foreground">{insuranceRate}% of vehicle cost</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="registration">Registration Charges (₹)</Label>
-              <Input
-                id="registration"
-                type="number"
-                min="0"
-                value={formData.registration_charges || ''}
-                onChange={(e) => updateField('registration_charges', parseFloat(e.target.value) || 0)}
-                placeholder="0"
-              />
+            <p className="text-xs text-muted-foreground">
+              Interest Rate: {interestRate}% p.a. | Loan: {formatCurrency(calculations.loan_amount)} | Tenure: {calculations.tenure_months} months
+            </p>
+            <div className="text-xs text-muted-foreground mt-2 p-2 bg-muted/50 rounded">
+              <strong>Loan breakdown:</strong> On-road price {formatCurrency(calculations.on_road_price)}
+              (Ex-showroom {formatCurrency(formData.ex_showroom_price)} + Insurance {formatCurrency(calculations.insurance_amount * 12)} + Registration {formatCurrency(formData.registration_charges)})
+              - Down payment {formatCurrency(calculations.down_payment_amount)}
             </div>
           </div>
 
           <Separator />
 
           <div className="flex justify-between items-center p-3 bg-primary/5 rounded-lg">
-            <span className="font-medium">Subtotal A</span>
+            <span className="font-medium">Subtotal A (Monthly EMI)</span>
             <span className="text-xl font-bold text-primary">{formatCurrency(calculations.subtotal_a)}</span>
           </div>
         </CardContent>
       </Card>
 
-
       {/* Section B - Operational Costs */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
-            <span className="bg-secondary text-secondary-foreground px-2 py-0.5 rounded text-sm">B</span>
+            <span className="bg-primary text-primary-foreground px-2 py-0.5 rounded text-sm">B</span>
             Operational Costs
           </CardTitle>
         </CardHeader>
@@ -833,7 +855,6 @@ export default function CostSheetForm() {
         </CardContent>
       </Card>
 
-
       {/* Admin Charges & Grand Total */}
       <Card className="border-primary/30">
         <CardHeader>
@@ -879,8 +900,8 @@ export default function CostSheetForm() {
           <Button variant="outline" onClick={() => navigate('/cost-sheets')} disabled={loading}>
             Cancel
           </Button>
-          <Button 
-            variant="secondary" 
+          <Button
+            variant="secondary"
             onClick={() => saveCostSheet('DRAFT')}
             disabled={loading || !user}
           >
@@ -888,7 +909,7 @@ export default function CostSheetForm() {
             {isEditing ? 'Save Changes (Draft)' : 'Save as Draft'}
           </Button>
           {!isEditing && (
-            <Button 
+            <Button
               onClick={() => saveCostSheet('PENDING_APPROVAL')}
               disabled={loading || !user}
             >
