@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Car, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import Logo from '@/assets/logos/autoriders.webp';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -54,11 +55,15 @@ export default function Login() {
       <div className="w-full max-w-md animate-fade-in">
         {/* Logo and Title */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary mb-4">
-            <Car className="w-8 h-8 text-primary-foreground" />
+          <div className="flex justify-center mb-4">
+            <img
+              src={Logo}
+              alt="Autoriders"
+              className="h-16 w-auto object-contain"
+            />
           </div>
           <h1 className="text-2xl font-display font-bold text-foreground">
-            Car Rental Cost System
+            Autoriders Cost Sheet Management
           </h1>
           <p className="text-muted-foreground mt-2">
             Sign in to manage cost sheets and approvals

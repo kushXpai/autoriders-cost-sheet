@@ -25,6 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import Logo from '@/assets/logos/autoriders.webp';
 
 interface NavItem {
   label: string;
@@ -90,12 +91,21 @@ export default function DashboardLayout() {
       >
         {/* Logo */}
         <div className="flex items-center gap-3 px-6 h-16 border-b border-sidebar-border">
-          <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-sidebar-primary">
-            <Car className="w-5 h-5 text-sidebar-primary-foreground" />
+          {/* Logo */}
+          <div className="flex-shrink-0">
+            <img
+              src={Logo}
+              alt="Autoriders"
+              className="h-10 w-auto object-contain"
+            />
           </div>
+
+          {/* App Name */}
           <span className="font-display font-semibold text-sidebar-foreground">
-            CarRental
+            Cost Sheet Management
           </span>
+
+          {/* Close button */}
           <button
             onClick={() => setSidebarOpen(false)}
             className="ml-auto lg:hidden text-sidebar-foreground hover:text-sidebar-primary transition-colors"
@@ -103,6 +113,7 @@ export default function DashboardLayout() {
             <X className="w-5 h-5" />
           </button>
         </div>
+
 
         {/* Navigation */}
         <nav className="p-4 space-y-1">
