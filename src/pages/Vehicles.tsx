@@ -58,7 +58,10 @@ export default function Vehicles() {
       const { data, error } = await supabase
         .from('vehicles')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('brand_name', { ascending: true })
+        .order('model_name', { ascending: true })
+        .order('variant_name', { ascending: true })
+        .order('mileage_km_per_unit', { ascending: true });
       if (error) throw error;
       setVehicles(data || []);
     } catch (err: any) {
