@@ -15,8 +15,16 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  // ✅ Initialize state from localStorage
+  const [user, setUser] = useState<User | null>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('user');
+      return saved ? JSON.parse(saved) : null;
+    }
+    return null;
+  });
 
+  // Sync Supabase session and persist user in localStorage
   useEffect(() => {
     const fetchSession = async () => {
       const { data } = await supabase.auth.getSession();
@@ -26,12 +34,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .select('*')
           .eq('id', data.session.user.id)
           .single<User>();
+
         setUser(profile || null);
+        if (profile) localStorage.setItem('user', JSON.stringify(profile));
       }
     };
 
     fetchSession();
 
+    // Listen for auth state changes
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         supabase
@@ -39,9 +50,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .select('*')
           .eq('id', session.user.id)
           .single<User>()
-          .then(({ data: profile }) => setUser(profile || null));
+          .then(({ data: profile }) => {
+            setUser(profile || null);
+            if (profile) localStorage.setItem('user', JSON.stringify(profile));
+          });
       } else {
         setUser(null);
+        localStorage.removeItem('user'); // ✅ Clear localStorage on logout
       }
     });
 
@@ -53,7 +68,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = async (email: string, password: string) => {
     try {
       const profile = await supabaseSignIn(email, password);
-      if (profile) setUser(profile);
+      if (profile) {
+        setUser(profile);
+        localStorage.setItem('user', JSON.stringify(profile)); // ✅ Persist login
+      }
       return !!profile;
     } catch (err) {
       console.error('Login failed:', err);
@@ -64,6 +82,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = async () => {
     await supabaseSignOut();
     setUser(null);
+    localStorage.removeItem('user'); // ✅ Remove login info
   };
 
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
