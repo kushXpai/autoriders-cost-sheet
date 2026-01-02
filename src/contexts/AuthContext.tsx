@@ -15,7 +15,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  // ✅ Initialize state from localStorage
+  // Load user from localStorage on first render
   const [user, setUser] = useState<User | null>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('user');
@@ -24,25 +24,42 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return null;
   });
 
-  // Sync Supabase session and persist user in localStorage
+  // Fetch Supabase session & user profile
   useEffect(() => {
     const fetchSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session?.user) {
-        const { data: profile } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', data.session.user.id)
-          .single<User>();
+      try {
+        const { data } = await supabase.auth.getSession();
 
-        setUser(profile || null);
-        if (profile) localStorage.setItem('user', JSON.stringify(profile));
+        if (data.session?.user) {
+          // Try fetching profile from 'users' table
+          const { data: profile, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', data.session.user.id)
+            .single<User>();
+
+          if (error && error.code !== 'PGRST116') {
+            console.error('Error fetching profile:', error.message);
+          }
+
+          // If profile exists, use it; else fallback to Supabase user object
+          const userProfile = profile || {
+            id: data.session.user.id,
+            email: data.session.user.email || '',
+            role: 'USER',
+          };
+
+          setUser(userProfile);
+          localStorage.setItem('user', JSON.stringify(userProfile));
+        }
+      } catch (err) {
+        console.error('Failed to fetch session:', err);
       }
     };
 
     fetchSession();
 
-    // Listen for auth state changes
+    // Listen to auth changes
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         supabase
@@ -50,13 +67,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .select('*')
           .eq('id', session.user.id)
           .single<User>()
-          .then(({ data: profile }) => {
-            setUser(profile || null);
-            if (profile) localStorage.setItem('user', JSON.stringify(profile));
+          .then(({ data: profile, error }) => {
+            const userProfile = profile || {
+              id: session.user.id,
+              email: session.user.email || '',
+              role: 'USER',
+            };
+
+            setUser(userProfile);
+            localStorage.setItem('user', JSON.stringify(userProfile));
+
+            if (error && error.code !== 'PGRST116') {
+              console.error('Error fetching profile on auth change:', error.message);
+            }
           });
       } else {
         setUser(null);
-        localStorage.removeItem('user'); // ✅ Clear localStorage on logout
+        localStorage.removeItem('user');
       }
     });
 
@@ -65,12 +92,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
+  // Login function
   const login = async (email: string, password: string) => {
     try {
       const profile = await supabaseSignIn(email, password);
       if (profile) {
         setUser(profile);
-        localStorage.setItem('user', JSON.stringify(profile)); // ✅ Persist login
+        localStorage.setItem('user', JSON.stringify(profile));
       }
       return !!profile;
     } catch (err) {
@@ -79,12 +107,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Logout function
   const logout = async () => {
     await supabaseSignOut();
     setUser(null);
-    localStorage.removeItem('user'); // ✅ Remove login info
+    localStorage.removeItem('user');
   };
 
+  // Role helpers
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
   const isSuperAdmin = user?.role === 'SUPERADMIN';
   const isAuthenticated = !!user;
