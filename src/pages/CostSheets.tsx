@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,10 +11,19 @@ import type { CostSheet, Vehicle } from '@/types';
 
 export default function CostSheets() {
   const { isAdmin } = useAuth();
-  const [filter, setFilter] = useState<string>('ALL');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const statusParam = searchParams.get('status');
+  const [filter, setFilter] = useState<string>(statusParam || 'ALL');
   const [costSheets, setCostSheets] = useState<CostSheet[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // Update filter when URL parameter changes
+  useEffect(() => {
+    if (statusParam) {
+      setFilter(statusParam);
+    }
+  }, [statusParam]);
 
   // Fetch cost sheets and vehicles from Supabase
   useEffect(() => {
@@ -58,6 +67,15 @@ export default function CostSheets() {
     REJECTED: { label: 'Rejected', className: 'bg-destructive/10 text-destructive', icon: XCircle },
   };
 
+  const handleFilterChange = (status: string) => {
+    setFilter(status);
+    if (status === 'ALL') {
+      setSearchParams({});
+    } else {
+      setSearchParams({ status });
+    }
+  };
+
   if (loading) {
     return <p className="text-center py-12 text-muted-foreground">Loading cost sheets...</p>;
   }
@@ -84,7 +102,7 @@ export default function CostSheets() {
             key={status}
             variant={filter === status ? 'default' : 'outline'}
             size="sm"
-            onClick={() => setFilter(status)}
+            onClick={() => handleFilterChange(status)}
           >
             {status === 'ALL' ? 'All' : status.replace('_', ' ')}
           </Button>

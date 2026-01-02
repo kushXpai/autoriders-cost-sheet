@@ -1,5 +1,6 @@
 // src/pages/Dashboard.tsx
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +9,7 @@ import { FileText, Car, Clock, CheckCircle, XCircle, AlertCircle, Users, Shield,
 
 export default function Dashboard() {
   const { user, isAdmin, isSuperAdmin } = useAuth();
+  const navigate = useNavigate();
 
   const [costSheets, setCostSheets] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
@@ -144,29 +146,119 @@ export default function Dashboard() {
 
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Total Cost Sheets" value={stats.total} subtitle={`${stats.draft} drafts, ${stats.pending} pending`} Icon={FileText} />
-        <StatCard title="Pending Approval" value={stats.pending} subtitle={isSuperAdmin ? 'Awaiting your review' : 'Awaiting approval'} Icon={Clock} color="text-warning" />
-        <StatCard title="Approved Value" value={stats.approved} subtitle={formatCurrency(stats.totalValue)} Icon={CheckCircle} color="text-success" />
-        <StatCard title="Active Vehicles" value={stats.activeVehicles} subtitle="In vehicle master" Icon={Car} color="text-primary" />
+        <StatCard 
+          title="Total Cost Sheets" 
+          value={stats.total} 
+          subtitle={`${stats.draft} drafts, ${stats.pending} pending`} 
+          Icon={FileText}
+          onClick={() => navigate('/cost-sheets')}
+        />
+        <StatCard 
+          title="Pending Approval" 
+          value={stats.pending} 
+          subtitle={isSuperAdmin ? 'Awaiting your review' : 'Awaiting approval'} 
+          Icon={Clock} 
+          color="text-warning"
+          onClick={() => navigate('/cost-sheets?status=PENDING_APPROVAL')}
+        />
+        <StatCard 
+          title="Approved Value" 
+          value={stats.approved} 
+          subtitle={formatCurrency(stats.totalValue)} 
+          Icon={CheckCircle} 
+          color="text-success"
+          onClick={() => navigate('/cost-sheets?status=APPROVED')}
+        />
+        <StatCard 
+          title="Active Vehicles" 
+          value={stats.activeVehicles} 
+          subtitle="In vehicle master" 
+          Icon={Car} 
+          color="text-primary"
+          onClick={() => navigate('/vehicles')}
+        />
       </div>
 
       {/* Admin Stats */}
       {isAdmin && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <StatCard title="Vehicle Fleet" value={adminStats.totalVehicles} subtitle={`${adminStats.inactiveVehicles} inactive`} Icon={Car} color="text-primary/80" bgColor="bg-primary/5" />
-          <StatCard title="System Users" value={adminStats.totalUsers} subtitle={`${adminStats.activeUsers} active`} Icon={Users} color="text-primary/80" bgColor="bg-primary/5" />
-          <StatCard title="Staff Members" value={adminStats.staffCount} subtitle={`${adminStats.adminCount} admins, ${adminStats.superAdminCount} super`} Icon={Users} color="text-primary/80" bgColor="bg-primary/5" />
-          <StatCard title="Rejected Sheets" value={stats.rejected} subtitle="Needs revision" Icon={XCircle} color="text-destructive" />
+          <StatCard 
+            title="Vehicle Fleet" 
+            value={adminStats.totalVehicles} 
+            subtitle={`${adminStats.inactiveVehicles} inactive`} 
+            Icon={Car} 
+            color="text-primary/80" 
+            bgColor="bg-primary/5"
+            onClick={() => navigate('/vehicles')}
+          />
+          <StatCard 
+            title="System Users" 
+            value={adminStats.totalUsers} 
+            subtitle={`${adminStats.activeUsers} active`} 
+            Icon={Users} 
+            color="text-primary/80" 
+            bgColor="bg-primary/5"
+            onClick={() => navigate('/users')}
+          />
+          <StatCard 
+            title="Staff Members" 
+            value={adminStats.staffCount} 
+            subtitle={`${adminStats.adminCount} admins, ${adminStats.superAdminCount} super`} 
+            Icon={Users} 
+            color="text-primary/80" 
+            bgColor="bg-primary/5"
+            onClick={() => navigate('/users')}
+          />
+          <StatCard 
+            title="Rejected Sheets" 
+            value={stats.rejected} 
+            subtitle="Needs revision" 
+            Icon={XCircle} 
+            color="text-destructive"
+            onClick={() => navigate('/cost-sheets?status=REJECTED')}
+          />
         </div>
       )}
 
       {/* SuperAdmin Stats */}
       {isSuperAdmin && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <StatCard title="Interest Rate" value={`${superAdminStats.interestRate}%`} subtitle="Active rate" Icon={TrendingUp} color="text-warning" bgColor="bg-warning/5" />
-          <StatCard title="Insurance Rate" value={`${superAdminStats.insuranceRate}%`} subtitle="Active rate" Icon={Shield} color="text-warning" bgColor="bg-warning/5" />
-          <StatCard title="Admin Charge" value={`${superAdminStats.adminChargePercent}%`} subtitle="Active charge" Icon={Settings} color="text-warning" bgColor="bg-warning/5" />
-          <StatCard title="Fuel Types" value={superAdminStats.fuelTypes} subtitle="Configured rates" Icon={Fuel} color="text-warning" bgColor="bg-warning/5" />
+          <StatCard 
+            title="Interest Rate" 
+            value={`${superAdminStats.interestRate}%`} 
+            subtitle="Active rate" 
+            Icon={TrendingUp} 
+            color="text-warning" 
+            bgColor="bg-warning/5"
+            onClick={() => navigate('/interest-rate')}
+          />
+          <StatCard 
+            title="Insurance Rate" 
+            value={`${superAdminStats.insuranceRate}%`} 
+            subtitle="Active rate" 
+            Icon={Shield} 
+            color="text-warning" 
+            bgColor="bg-warning/5"
+            onClick={() => navigate('/insurance-rate')}
+          />
+          <StatCard 
+            title="Admin Charge" 
+            value={`${superAdminStats.adminChargePercent}%`} 
+            subtitle="Active charge" 
+            Icon={Settings} 
+            color="text-warning" 
+            bgColor="bg-warning/5"
+            onClick={() => navigate('/admin-charges')}
+          />
+          <StatCard 
+            title="Fuel Types" 
+            value={superAdminStats.fuelTypes} 
+            subtitle="Configured rates" 
+            Icon={Fuel} 
+            color="text-warning" 
+            bgColor="bg-warning/5"
+            onClick={() => navigate('/fuel-rates')}
+          />
         </div>
       )}
 
@@ -187,7 +279,11 @@ export default function Dashboard() {
             ) : (
               <div className="space-y-3">
                 {recentSheets.map(sheet => (
-                  <div key={sheet.id} className="flex items-center gap-4 p-3 rounded-lg bg-muted/50">
+                  <div 
+                    key={sheet.id} 
+                    className="flex items-center gap-4 p-3 rounded-lg bg-muted/50 hover:bg-muted cursor-pointer transition-colors"
+                    onClick={() => navigate(`/cost-sheets/${sheet.id}`)}
+                  >
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">{sheet.company_name}</p>
                       <p className="text-sm text-muted-foreground">{formatCurrency(sheet.grand_total)}</p>
@@ -207,10 +303,34 @@ export default function Dashboard() {
             <CardDescription>Cost sheets by status</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <StatusBar label="Draft" count={stats.draft} total={stats.total} color="bg-muted-foreground" />
-            <StatusBar label="Pending" count={stats.pending} total={stats.total} color="bg-warning" />
-            <StatusBar label="Approved" count={stats.approved} total={stats.total} color="bg-success" />
-            <StatusBar label="Rejected" count={stats.rejected} total={stats.total} color="bg-destructive" />
+            <StatusBar 
+              label="Draft" 
+              count={stats.draft} 
+              total={stats.total} 
+              color="bg-muted-foreground"
+              onClick={() => navigate('/cost-sheets?status=DRAFT')}
+            />
+            <StatusBar 
+              label="Pending" 
+              count={stats.pending} 
+              total={stats.total} 
+              color="bg-warning"
+              onClick={() => navigate('/cost-sheets?status=PENDING_APPROVAL')}
+            />
+            <StatusBar 
+              label="Approved" 
+              count={stats.approved} 
+              total={stats.total} 
+              color="bg-success"
+              onClick={() => navigate('/cost-sheets?status=APPROVED')}
+            />
+            <StatusBar 
+              label="Rejected" 
+              count={stats.rejected} 
+              total={stats.total} 
+              color="bg-destructive"
+              onClick={() => navigate('/cost-sheets?status=REJECTED')}
+            />
           </CardContent>
         </Card>
       </div>
@@ -221,9 +341,12 @@ export default function Dashboard() {
 // --------------------------
 // Helper Components
 // --------------------------
-function StatCard({ title, value, subtitle, Icon, color = 'text-foreground', bgColor = 'bg-card' }: any) {
+function StatCard({ title, value, subtitle, Icon, color = 'text-foreground', bgColor = 'bg-card', onClick }: any) {
   return (
-    <Card className={`${bgColor}`}>
+    <Card 
+      className={`${bgColor} cursor-pointer hover:shadow-lg transition-all duration-200 hover:scale-105`}
+      onClick={onClick}
+    >
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
         <Icon className={`w-4 h-4 ${color}`} />
@@ -254,11 +377,14 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function StatusBar({ label, count, total, color }: { label: string; count: number; total: number; color: string }) {
+function StatusBar({ label, count, total, color, onClick }: { label: string; count: number; total: number; color: string; onClick?: () => void }) {
   const percentage = total > 0 ? (count / total) * 100 : 0;
 
   return (
-    <div className="space-y-2">
+    <div 
+      className="space-y-2 cursor-pointer hover:opacity-80 transition-opacity"
+      onClick={onClick}
+    >
       <div className="flex justify-between text-sm">
         <span className="text-muted-foreground">{label}</span>
         <span className="font-medium">{count}</span>
