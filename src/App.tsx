@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -24,35 +24,40 @@ import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
 
+// ✅ Data Router configuration
+const router = createBrowserRouter([
+  { path: "/login", element: <Login /> },
+  { path: "/", element: <Navigate to="/dashboard" replace /> },
+
+  {
+    element: <ProtectedRoute><DashboardLayout /></ProtectedRoute>,
+    children: [
+      { path: "/dashboard", element: <Dashboard /> },
+      { path: "/cost-sheets", element: <CostSheets /> },
+      { path: "/cost-sheets/new", element: <CostSheetForm /> },
+      { path: "/cost-sheets/:id", element: <CostSheetDetail /> },
+      { path: "/cost-sheets/:id/edit", element: <CostSheetForm /> },
+      { path: "/vehicles", element: <Vehicles /> },
+      { path: "/fuel-rates", element: <FuelRates /> },
+      { path: "/interest-rate", element: <ProtectedRoute requireSuperAdmin><InterestRate /></ProtectedRoute> },
+      { path: "/insurance-rate", element: <ProtectedRoute requireSuperAdmin><InsuranceRate /></ProtectedRoute> },
+      { path: "/admin-charges", element: <ProtectedRoute requireSuperAdmin><AdminCharges /></ProtectedRoute> },
+      { path: "/email-settings", element: <ProtectedRoute requireAdmin><EmailSettings /></ProtectedRoute> },
+      { path: "/users", element: <ProtectedRoute requireAdmin><UserManagement /></ProtectedRoute> },
+    ],
+  },
+
+  { path: "*", element: <NotFound /> },
+]);
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
       <AuthProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            
-            <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/cost-sheets" element={<CostSheets />} />
-              <Route path="/cost-sheets/new" element={<CostSheetForm />} />
-              <Route path="/cost-sheets/:id" element={<CostSheetDetail />} />
-              <Route path="/cost-sheets/:id/edit" element={<CostSheetForm />} />
-              <Route path="/vehicles" element={<Vehicles />} />
-              <Route path="/fuel-rates" element={<FuelRates />} />
-              <Route path="/interest-rate" element={<ProtectedRoute requireSuperAdmin><InterestRate /></ProtectedRoute>} />
-              <Route path="/insurance-rate" element={<ProtectedRoute requireSuperAdmin><InsuranceRate /></ProtectedRoute>} />
-              <Route path="/admin-charges" element={<ProtectedRoute requireSuperAdmin><AdminCharges /></ProtectedRoute>} />
-              <Route path="/email-settings" element={<ProtectedRoute requireAdmin><EmailSettings /></ProtectedRoute>} />
-              <Route path="/users" element={<ProtectedRoute requireAdmin><UserManagement /></ProtectedRoute>} />
-            </Route>
-            
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
+        {/* ✅ Use RouterProvider instead of BrowserRouter */}
+        <RouterProvider router={router} />
       </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
