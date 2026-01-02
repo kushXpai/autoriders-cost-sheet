@@ -384,10 +384,10 @@ export default function CostSheetForm() {
         vehicle_id: formData.vehicle_id,
         tenure_years: formData.tenure_years,
         tenure_months: calculations.tenure_months,
-        ex_showroom_price: formData.ex_showroom_price,  // CHANGED from vehicle_cost
+        ex_showroom_price: formData.ex_showroom_price,
         insurance_amount: calculations.insurance_amount,
         registration_charges: formData.registration_charges,
-        on_road_price: calculations.on_road_price,  // ADDED
+        on_road_price: calculations.on_road_price,
         down_payment_percent: formData.down_payment_percent,
         down_payment_amount: calculations.down_payment_amount,
         loan_amount: calculations.loan_amount,
@@ -437,13 +437,58 @@ export default function CostSheetForm() {
         throw result.error;
       }
 
-      toast({
-        title: isEditing
-          ? 'Cost sheet updated and set to draft. Submit for approval when ready.'
-          : status === 'DRAFT'
-            ? 'Cost sheet saved as draft'
-            : 'Cost sheet submitted for approval'
-      });
+      // Send email notification if submitted for approval
+      if (finalStatus === 'PENDING_APPROVAL' && result.data) {
+        try {
+          const { sendCostSheetSubmissionEmail } = await import('@/services/emailService');
+          const vehicle = vehicles.find(v => v.id === formData.vehicle_id);
+          const vehicleInfo = vehicle ? `${vehicle.brand_name} ${vehicle.model_name}` : 'N/A';
+
+          const { data: userData } = await supabase
+            .from('users')
+            .select('full_name, email')
+            .eq('id', user.id)
+            .single();
+
+          await sendCostSheetSubmissionEmail({
+            costSheetId: result.data.id,
+            companyName: formData.company_name,
+            creatorName: userData?.full_name || user.email || 'Unknown',
+            creatorEmail: user.email || '',
+            vehicleInfo,
+            grandTotal: calculations.grand_total,
+            status: finalStatus,
+          });
+
+          toast({
+            title: isEditing
+              ? 'Cost sheet updated'
+              : status === 'DRAFT'
+                ? 'Cost sheet saved as draft'
+                : 'Cost sheet submitted for approval',
+            description: 'Email notification sent via Resend'
+          });
+        } catch (emailError) {
+          console.error('Failed to send email notification:', emailError);
+          toast({
+            title: isEditing
+              ? 'Cost sheet updated'
+              : status === 'DRAFT'
+                ? 'Cost sheet saved as draft'
+                : 'Cost sheet submitted for approval',
+            description: 'Note: Email notification failed to send'
+          });
+        }
+      } else {
+        toast({
+          title: isEditing
+            ? 'Cost sheet updated and set to draft. Submit for approval when ready.'
+            : status === 'DRAFT'
+              ? 'Cost sheet saved as draft'
+              : 'Cost sheet submitted for approval'
+        });
+      }
+
       navigate('/cost-sheets');
     } catch (error: any) {
       console.error('Error saving cost sheet:', error);

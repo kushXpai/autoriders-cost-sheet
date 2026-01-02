@@ -17,8 +17,8 @@ import {
 } from '@/components/ui/dialog';
 import { supabase } from '../supabase/client';
 import { formatCurrency } from '@/lib/calculations';
-import { generateCostSheetPDF } from '@/lib/pdfGenerator';
-import { 
+import { generateCostSheetPDF } from '@/services/pdfGenerator';
+import {
   ArrowLeft, Pencil, CheckCircle, XCircle, Clock, FileText,
   Car, Calendar, Building, User, Download, Send
 } from 'lucide-react';
@@ -86,7 +86,6 @@ export default function CostSheetDetail() {
     fetchData();
   }, [id]);
 
-
   if (loading) return <p className="text-center py-12">Loading...</p>;
   if (!costSheet) {
     return (
@@ -99,7 +98,6 @@ export default function CostSheetDetail() {
       </div>
     );
   }
-
 
   const vehicle = vehicles.find(v => v.id === costSheet.vehicle_id);
   const creator = users.find(u => u.id === costSheet.created_by);
@@ -122,13 +120,11 @@ export default function CostSheetDetail() {
   const canApprove = isSuperAdmin && costSheet.status === 'PENDING_APPROVAL';
   const canSubmitForApproval = costSheet.status === 'DRAFT' && (costSheet.created_by === user?.id || isAdmin);
 
-
   const updateStatus = async (status: 'APPROVED' | 'REJECTED' | 'PENDING_APPROVAL') => {
     if (status === 'REJECTED' && !remarks.trim()) {
       toast({ title: 'Please provide remarks', variant: 'destructive' });
       return;
     }
-
 
     const updates: any = { status, updated_at: new Date().toISOString() };
     if (status === 'APPROVED' || status === 'REJECTED') {
@@ -140,18 +136,76 @@ export default function CostSheetDetail() {
       updates.submitted_at = new Date().toISOString();
     }
 
-
     const { error } = await supabase.from('cost_sheets').update(updates).eq('id', id);
-
 
     if (error) {
       toast({ title: 'Failed to update status', variant: 'destructive' });
-    } else {
-      toast({ title: `Cost sheet ${status.toLowerCase()} successfully` });
-      navigate('/cost-sheets');
+      return;
     }
-  };
 
+    // Send email notification for approval/rejection
+    if ((status === 'APPROVED' || status === 'REJECTED') && creator?.email) {
+      try {
+        const emailModule = await import('@/services/emailService');
+        const sendEmail = status === 'APPROVED'
+          ? emailModule.sendCostSheetApprovalEmail
+          : emailModule.sendCostSheetRejectionEmail;
+
+        await sendEmail({
+          costSheetId: id!,
+          companyName: costSheet.company_name,
+          creatorName: creator.full_name || 'Unknown',
+          creatorEmail: creator.email,
+          vehicleInfo: vehicle ? `${vehicle.brand_name} ${vehicle.model_name}` : 'N/A',
+          grandTotal: costSheet.grand_total,
+          status: status,
+          remarks: remarks || undefined,
+        });
+
+        toast({
+          title: `Cost sheet ${status.toLowerCase()} successfully`,
+          description: 'Email notification sent via Resend'
+        });
+      } catch (emailError) {
+        console.error('Failed to send email notification:', emailError);
+        toast({
+          title: `Cost sheet ${status.toLowerCase()} successfully`,
+          description: 'Note: Email notification failed to send',
+          variant: 'default'
+        });
+      }
+    }
+
+    // Send submission email if submitting for approval from detail page
+    if (status === 'PENDING_APPROVAL' && creator?.email) {
+      try {
+        const { sendCostSheetSubmissionEmail } = await import('@/services/emailService');
+
+        await sendCostSheetSubmissionEmail({
+          costSheetId: id!,
+          companyName: costSheet.company_name,
+          creatorName: creator.full_name || 'Unknown',
+          creatorEmail: creator.email,
+          vehicleInfo: vehicle ? `${vehicle.brand_name} ${vehicle.model_name}` : 'N/A',
+          grandTotal: costSheet.grand_total,
+          status: status,
+        });
+
+        toast({
+          title: 'Cost sheet submitted for approval',
+          description: 'Email notification sent via Resend'
+        });
+      } catch (emailError) {
+        console.error('Failed to send email notification:', emailError);
+        toast({
+          title: 'Cost sheet submitted for approval',
+          description: 'Note: Email notification failed to send'
+        });
+      }
+    }
+
+    navigate('/cost-sheets');
+  };
 
   return (
     <div className="space-y-6 animate-fade-in max-w-4xl mx-auto">
@@ -351,9 +405,9 @@ export default function CostSheetDetail() {
               <DetailRow label="Subtotal A" value={formatCurrency(costSheet.subtotal_a)} />
               <DetailRow label="Subtotal B" value={formatCurrency(costSheet.subtotal_b)} />
               <Separator />
-              <DetailRow 
-                label={`Admin Charges (${costSheet.admin_charge_percent.toFixed(1)}%)`} 
-                value={formatCurrency(costSheet.admin_charge_amount)} 
+              <DetailRow
+                label={`Admin Charges (${costSheet.admin_charge_percent.toFixed(1)}%)`}
+                value={formatCurrency(costSheet.admin_charge_amount)}
               />
             </div>
             <div className="flex flex-col justify-center items-center p-6 bg-primary rounded-lg text-primary-foreground">
