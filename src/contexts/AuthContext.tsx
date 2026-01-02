@@ -1,3 +1,4 @@
+// src/contexts/AuthContext.tsx
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { supabase } from '@/supabase/client';
 import type { User } from '@/types';
@@ -15,7 +16,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  // Initialize state from localStorage
+  // Load user from localStorage initially
   const [user, setUser] = useState<User | null>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('user');
@@ -33,18 +34,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         if (data.session?.user) {
           // Try fetching profile from 'users' table
-          const { data: profile, error } = await supabase
+          const { data: profile } = await supabase
             .from('users')
             .select('*')
             .eq('id', data.session.user.id)
             .single<User>();
 
-          // If row exists, use it; if not, fallback to minimal user object
-          const currentUser = profile || {
+          // TS-safe fallback if row missing
+          const currentUser: User = profile || {
             id: data.session.user.id,
-            email: data.session.user.email || '',
             full_name: data.session.user.email || '',
-            role: 'STAFF',
+            email: data.session.user.email || '',
+            role: 'STAFF',                     // default role
+            is_active: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           };
 
           setUser(currentUser);
@@ -61,6 +65,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     init();
 
+    // Listen to auth state changes
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         supabase
@@ -69,12 +74,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .eq('id', session.user.id)
           .single<User>()
           .then(({ data: profile }) => {
-            const currentUser = profile || {
+            const currentUser: User = profile || {
               id: session.user.id,
-              email: session.user.email || '',
               full_name: session.user.email || '',
+              email: session.user.email || '',
               role: 'STAFF',
+              is_active: true,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
             };
+
             setUser(currentUser);
             localStorage.setItem('user', JSON.stringify(currentUser));
           });
@@ -89,6 +98,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
+  // Login function
   const login = async (email: string, password: string) => {
     try {
       const profile = await supabaseSignIn(email, password);
@@ -103,17 +113,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Logout function
   const logout = async () => {
     await supabaseSignOut();
     setUser(null);
     localStorage.removeItem('user');
   };
 
+  // Role helpers
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
   const isSuperAdmin = user?.role === 'SUPERADMIN';
   const isAuthenticated = !!user;
 
-  // Return loading state so UI can wait before rendering
+  // Return loading state so UI waits before rendering
   return (
     <AuthContext.Provider value={{ user, login, logout, isAdmin, isSuperAdmin, isAuthenticated }}>
       {loading ? <div className="text-center py-12">Loading...</div> : children}
