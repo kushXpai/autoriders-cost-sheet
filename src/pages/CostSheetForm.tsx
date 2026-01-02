@@ -138,37 +138,56 @@ export default function CostSheetForm() {
 
     try {
       const calculations = calculateWithCurrentData();
+
+      // Validate calculations - replace NaN with 0
+      const safeCalculations = {
+        tenure_months: isNaN(calculations.tenure_months) ? 0 : calculations.tenure_months,
+        insurance_amount: isNaN(calculations.insurance_amount) ? 0 : calculations.insurance_amount,
+        on_road_price: isNaN(calculations.on_road_price) ? 0 : calculations.on_road_price,
+        down_payment_amount: isNaN(calculations.down_payment_amount) ? 0 : calculations.down_payment_amount,
+        loan_amount: isNaN(calculations.loan_amount) ? 0 : calculations.loan_amount,
+        emi_amount: isNaN(calculations.emi_amount) ? 0 : calculations.emi_amount,
+        subtotal_a: isNaN(calculations.subtotal_a) ? 0 : calculations.subtotal_a,
+        fuel_cost: isNaN(calculations.fuel_cost) ? 0 : calculations.fuel_cost,
+        total_driver_cost: isNaN(calculations.total_driver_cost) ? 0 : calculations.total_driver_cost,
+        maintenance_cost: isNaN(calculations.maintenance_cost) ? 0 : calculations.maintenance_cost,
+        subtotal_b: isNaN(calculations.subtotal_b) ? 0 : calculations.subtotal_b,
+        admin_charge_percent: isNaN(calculations.admin_charge_percent) ? 0 : calculations.admin_charge_percent,
+        admin_charge_amount: isNaN(calculations.admin_charge_amount) ? 0 : calculations.admin_charge_amount,
+        grand_total: isNaN(calculations.grand_total) ? 0 : calculations.grand_total,
+      };
+
       const now = new Date().toISOString();
 
       const costSheetData: Omit<CostSheet, 'id' | 'created_at' | 'updated_at'> = {
         company_name: formDataRef.current.company_name.trim(),
         vehicle_id: formDataRef.current.vehicle_id,
         tenure_years: formDataRef.current.tenure_years,
-        tenure_months: calculations.tenure_months,
-        ex_showroom_price: formDataRef.current.ex_showroom_price,
-        insurance_amount: calculations.insurance_amount,
-        registration_charges: formDataRef.current.registration_charges,
-        on_road_price: calculations.on_road_price,
-        down_payment_percent: formDataRef.current.down_payment_percent,
-        down_payment_amount: calculations.down_payment_amount,
-        loan_amount: calculations.loan_amount,
-        emi_amount: calculations.emi_amount,
-        subtotal_a: calculations.subtotal_a,
-        monthly_km: formDataRef.current.monthly_km,
-        daily_hours: formDataRef.current.daily_hours,
-        fuel_cost: calculations.fuel_cost,
-        drivers_count: formDataRef.current.drivers_count,
-        driver_salary_per_driver: formDataRef.current.driver_salary_per_driver,
-        total_driver_cost: calculations.total_driver_cost,
-        parking_charges: formDataRef.current.parking_charges,
-        maintenance_cost: calculations.maintenance_cost,
-        supervisor_cost: formDataRef.current.supervisor_cost,
-        gps_camera_cost: formDataRef.current.gps_camera_cost,
-        permit_cost: formDataRef.current.permit_cost,
-        subtotal_b: calculations.subtotal_b,
-        admin_charge_percent: calculations.admin_charge_percent,
-        admin_charge_amount: calculations.admin_charge_amount,
-        grand_total: calculations.grand_total,
+        tenure_months: safeCalculations.tenure_months,
+        ex_showroom_price: formDataRef.current.ex_showroom_price || 0,
+        insurance_amount: safeCalculations.insurance_amount,
+        registration_charges: formDataRef.current.registration_charges || 0,
+        on_road_price: safeCalculations.on_road_price,
+        down_payment_percent: isNaN(formDataRef.current.down_payment_percent) ? 0 : formDataRef.current.down_payment_percent,
+        down_payment_amount: safeCalculations.down_payment_amount,
+        loan_amount: safeCalculations.loan_amount,
+        emi_amount: safeCalculations.emi_amount,
+        subtotal_a: safeCalculations.subtotal_a,
+        monthly_km: formDataRef.current.monthly_km || 0,
+        daily_hours: formDataRef.current.daily_hours || 0,
+        fuel_cost: safeCalculations.fuel_cost,
+        drivers_count: formDataRef.current.drivers_count || 0,
+        driver_salary_per_driver: formDataRef.current.driver_salary_per_driver || 0,
+        total_driver_cost: safeCalculations.total_driver_cost,
+        parking_charges: formDataRef.current.parking_charges || 0,
+        maintenance_cost: safeCalculations.maintenance_cost,
+        supervisor_cost: formDataRef.current.supervisor_cost || 0,
+        gps_camera_cost: formDataRef.current.gps_camera_cost || 0,
+        permit_cost: formDataRef.current.permit_cost || 0,
+        subtotal_b: safeCalculations.subtotal_b,
+        admin_charge_percent: safeCalculations.admin_charge_percent,
+        admin_charge_amount: safeCalculations.admin_charge_amount,
+        grand_total: safeCalculations.grand_total,
         status: 'DRAFT',
         approval_remarks: '',
         submitted_at: null,
@@ -233,29 +252,48 @@ export default function CostSheetForm() {
   // Helper to calculate with current data
   const calculateWithCurrentData = () => {
     const tenure_months = formDataRef.current.tenure_years * 12;
-    const insurance_amount_annual = formDataRef.current.ex_showroom_price * (insuranceRate / 100);
+    const ex_showroom = formDataRef.current.ex_showroom_price || 0;
+    const insurance_amount_annual = ex_showroom * (insuranceRate / 100);
     const insurance_amount = insurance_amount_annual / 12;
-    const on_road_price = formDataRef.current.ex_showroom_price + insurance_amount_annual + formDataRef.current.registration_charges;
-    const down_payment_amount = on_road_price * (formDataRef.current.down_payment_percent / 100);
+    const registration = formDataRef.current.registration_charges || 0;
+    const on_road_price = ex_showroom + insurance_amount_annual + registration;
+
+    // Ensure down_payment_percent is a valid number
+    const down_payment_percent = isNaN(formDataRef.current.down_payment_percent) ? 0 : formDataRef.current.down_payment_percent;
+    const down_payment_amount = on_road_price * (down_payment_percent / 100);
     const loan_amount = on_road_price - down_payment_amount;
+
     const monthlyRate = interestRate / 100 / 12;
     const n = tenure_months;
-    const emi_amount = monthlyRate <= 0 ? loan_amount / tenure_months : (loan_amount * monthlyRate * Math.pow(1 + monthlyRate, n)) / (Math.pow(1 + monthlyRate, n) - 1);
+    const emi_amount = loan_amount <= 0 ? 0 : (monthlyRate <= 0 ? loan_amount / tenure_months : (loan_amount * monthlyRate * Math.pow(1 + monthlyRate, n)) / (Math.pow(1 + monthlyRate, n) - 1));
     const subtotal_a = emi_amount;
+
     const selectedVehicle = vehicles.find(v => v.id === formDataRef.current.vehicle_id);
     const mileage = selectedVehicle?.mileage_km_per_unit ?? 25;
-    const fuel_cost = (formDataRef.current.monthly_km / mileage) * fuelRate;
+    const monthly_km = formDataRef.current.monthly_km || 0;
+    const fuel_cost = mileage > 0 ? (monthly_km / mileage) * fuelRate : 0;
     const maintenance_cost_per_km = selectedVehicle?.maintenance_cost_per_km ?? 0;
-    const maintenance_cost = formDataRef.current.monthly_km * maintenance_cost_per_km;
-    const total_driver_cost = formDataRef.current.drivers_count * formDataRef.current.driver_salary_per_driver;
-    const subtotal_b = fuel_cost + total_driver_cost + maintenance_cost + formDataRef.current.parking_charges + formDataRef.current.supervisor_cost + formDataRef.current.gps_camera_cost + formDataRef.current.permit_cost;
+    const maintenance_cost = monthly_km * maintenance_cost_per_km;
+    const total_driver_cost = (formDataRef.current.drivers_count || 0) * (formDataRef.current.driver_salary_per_driver || 0);
+    const subtotal_b = fuel_cost + total_driver_cost + maintenance_cost + (formDataRef.current.parking_charges || 0) + (formDataRef.current.supervisor_cost || 0) + (formDataRef.current.gps_camera_cost || 0) + (formDataRef.current.permit_cost || 0);
     const admin_charge_amount = (subtotal_a + subtotal_b) * (adminChargePercent / 100);
     const grand_total = subtotal_a + subtotal_b + admin_charge_amount;
 
     return {
-      tenure_months, insurance_amount, on_road_price, down_payment_amount, loan_amount,
-      emi_amount, subtotal_a, fuel_cost, total_driver_cost, maintenance_cost, subtotal_b,
-      admin_charge_percent: adminChargePercent, admin_charge_amount, grand_total,
+      tenure_months,
+      insurance_amount,
+      on_road_price,
+      down_payment_amount,
+      loan_amount,
+      emi_amount,
+      subtotal_a,
+      fuel_cost,
+      total_driver_cost,
+      maintenance_cost,
+      subtotal_b,
+      admin_charge_percent: adminChargePercent,
+      admin_charge_amount,
+      grand_total,
     };
   };
 
@@ -343,23 +381,28 @@ export default function CostSheetForm() {
       setFormData(draftToRestore.formData);
       setSelectedCity(draftToRestore.selectedCity);
     } else {
-      // database draft
+      // database draft - ensure all values are valid numbers
+      const onRoadPrice = draftToRestore.on_road_price || 1; // Avoid division by zero
+      const downPaymentPercent = draftToRestore.down_payment_amount && onRoadPrice > 0
+        ? (draftToRestore.down_payment_amount / onRoadPrice) * 100
+        : 0;
+
       setFormData({
-        company_name: draftToRestore.company_name,
-        vehicle_id: draftToRestore.vehicle_id,
-        tenure_years: draftToRestore.tenure_years,
-        ex_showroom_price: draftToRestore.ex_showroom_price,
-        down_payment_percent: (draftToRestore.down_payment_amount / draftToRestore.on_road_price) * 100,
-        registration_charges: draftToRestore.registration_charges,
-        monthly_km: draftToRestore.monthly_km,
-        daily_hours: draftToRestore.daily_hours,
-        drivers_count: draftToRestore.drivers_count,
-        driver_salary_per_driver: draftToRestore.driver_salary_per_driver,
-        parking_charges: draftToRestore.parking_charges,
-        maintenance_cost: draftToRestore.maintenance_cost,
-        supervisor_cost: draftToRestore.supervisor_cost,
-        gps_camera_cost: draftToRestore.gps_camera_cost,
-        permit_cost: draftToRestore.permit_cost,
+        company_name: draftToRestore.company_name || '',
+        vehicle_id: draftToRestore.vehicle_id || '',
+        tenure_years: draftToRestore.tenure_years || 3,
+        ex_showroom_price: draftToRestore.ex_showroom_price || 0,
+        down_payment_percent: isNaN(downPaymentPercent) ? 0 : downPaymentPercent,
+        registration_charges: draftToRestore.registration_charges || 0,
+        monthly_km: draftToRestore.monthly_km || 3000,
+        daily_hours: draftToRestore.daily_hours || 8,
+        drivers_count: draftToRestore.drivers_count || 1,
+        driver_salary_per_driver: draftToRestore.driver_salary_per_driver || 15000,
+        parking_charges: draftToRestore.parking_charges || 0,
+        maintenance_cost: draftToRestore.maintenance_cost || 0,
+        supervisor_cost: draftToRestore.supervisor_cost || 0,
+        gps_camera_cost: draftToRestore.gps_camera_cost || 0,
+        permit_cost: draftToRestore.permit_cost || 0,
       });
     }
 
@@ -500,22 +543,27 @@ export default function CostSheetForm() {
       if (error) throw error;
 
       if (data) {
+        const onRoadPrice = data.on_road_price || 1; // Avoid division by zero
+        const downPaymentPercent = data.down_payment_amount && onRoadPrice > 0
+          ? (data.down_payment_amount / onRoadPrice) * 100
+          : 0;
+
         setFormData({
-          company_name: data.company_name,
-          vehicle_id: data.vehicle_id,
-          tenure_years: data.tenure_years,
-          ex_showroom_price: data.ex_showroom_price,
-          down_payment_percent: (data.down_payment_amount / data.on_road_price) * 100,
-          registration_charges: data.registration_charges,
-          monthly_km: data.monthly_km,
-          daily_hours: data.daily_hours,
-          drivers_count: data.drivers_count,
-          driver_salary_per_driver: data.driver_salary_per_driver,
-          parking_charges: data.parking_charges,
-          maintenance_cost: data.maintenance_cost,
-          supervisor_cost: data.supervisor_cost,
-          gps_camera_cost: data.gps_camera_cost,
-          permit_cost: data.permit_cost,
+          company_name: data.company_name || '',
+          vehicle_id: data.vehicle_id || '',
+          tenure_years: data.tenure_years || 3,
+          ex_showroom_price: data.ex_showroom_price || 0,
+          down_payment_percent: isNaN(downPaymentPercent) ? 0 : downPaymentPercent,
+          registration_charges: data.registration_charges || 0,
+          monthly_km: data.monthly_km || 3000,
+          daily_hours: data.daily_hours || 8,
+          drivers_count: data.drivers_count || 1,
+          driver_salary_per_driver: data.driver_salary_per_driver || 15000,
+          parking_charges: data.parking_charges || 0,
+          maintenance_cost: data.maintenance_cost || 0,
+          supervisor_cost: data.supervisor_cost || 0,
+          gps_camera_cost: data.gps_camera_cost || 0,
+          permit_cost: data.permit_cost || 0,
         });
         initialLoadRef.current = false;
       }
@@ -536,29 +584,48 @@ export default function CostSheetForm() {
     }
 
     const tenure_months = formData.tenure_years * 12;
-    const insurance_amount_annual = formData.ex_showroom_price * (insuranceRate / 100);
+    const ex_showroom = formData.ex_showroom_price || 0;
+    const insurance_amount_annual = ex_showroom * (insuranceRate / 100);
     const insurance_amount = insurance_amount_annual / 12;
-    const on_road_price = formData.ex_showroom_price + insurance_amount_annual + formData.registration_charges;
-    const down_payment_amount = on_road_price * (formData.down_payment_percent / 100);
+    const registration = formData.registration_charges || 0;
+    const on_road_price = ex_showroom + insurance_amount_annual + registration;
+
+    // Ensure down_payment_percent is a valid number
+    const down_payment_percent = isNaN(formData.down_payment_percent) ? 0 : formData.down_payment_percent;
+    const down_payment_amount = on_road_price * (down_payment_percent / 100);
     const loan_amount = on_road_price - down_payment_amount;
+
     const monthlyRate = interestRate / 100 / 12;
     const n = tenure_months;
-    const emi_amount = monthlyRate <= 0 ? loan_amount / tenure_months : (loan_amount * monthlyRate * Math.pow(1 + monthlyRate, n)) / (Math.pow(1 + monthlyRate, n) - 1);
+    const emi_amount = loan_amount <= 0 ? 0 : (monthlyRate <= 0 ? loan_amount / tenure_months : (loan_amount * monthlyRate * Math.pow(1 + monthlyRate, n)) / (Math.pow(1 + monthlyRate, n) - 1));
     const subtotal_a = emi_amount;
+
     const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id);
     const mileage = selectedVehicle?.mileage_km_per_unit ?? 25;
-    const fuel_cost = (formData.monthly_km / mileage) * fuelRate;
+    const monthly_km = formData.monthly_km || 0;
+    const fuel_cost = mileage > 0 ? (monthly_km / mileage) * fuelRate : 0;
     const maintenance_cost_per_km = selectedVehicle?.maintenance_cost_per_km ?? 0;
-    const maintenance_cost = formData.monthly_km * maintenance_cost_per_km;
-    const total_driver_cost = formData.drivers_count * formData.driver_salary_per_driver;
-    const subtotal_b = fuel_cost + total_driver_cost + maintenance_cost + formData.parking_charges + formData.supervisor_cost + formData.gps_camera_cost + formData.permit_cost;
+    const maintenance_cost = monthly_km * maintenance_cost_per_km;
+    const total_driver_cost = (formData.drivers_count || 0) * (formData.driver_salary_per_driver || 0);
+    const subtotal_b = fuel_cost + total_driver_cost + maintenance_cost + (formData.parking_charges || 0) + (formData.supervisor_cost || 0) + (formData.gps_camera_cost || 0) + (formData.permit_cost || 0);
     const admin_charge_amount = (subtotal_a + subtotal_b) * (adminChargePercent / 100);
     const grand_total = subtotal_a + subtotal_b + admin_charge_amount;
 
     return {
-      tenure_months, insurance_amount, on_road_price, down_payment_amount, loan_amount,
-      emi_amount, subtotal_a, fuel_cost, total_driver_cost, maintenance_cost, subtotal_b,
-      admin_charge_percent: adminChargePercent, admin_charge_amount, grand_total,
+      tenure_months,
+      insurance_amount,
+      on_road_price,
+      down_payment_amount,
+      loan_amount,
+      emi_amount,
+      subtotal_a,
+      fuel_cost,
+      total_driver_cost,
+      maintenance_cost,
+      subtotal_b,
+      admin_charge_percent: adminChargePercent,
+      admin_charge_amount,
+      grand_total,
     };
   }, [formData, vehicles, interestRate, adminChargePercent, insuranceRate, fuelRate]);
 
