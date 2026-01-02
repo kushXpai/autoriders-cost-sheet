@@ -60,7 +60,7 @@ export default function CostSheetForm() {
     vehicle_id: '',
     tenure_years: 3,
     ex_showroom_price: 0,
-    down_payment_percent: 20,
+    down_payment_percent: 0,
     registration_charges: 0,
     monthly_km: 3000,
     daily_hours: 8,
@@ -112,7 +112,7 @@ export default function CostSheetForm() {
   // Save to localStorage (debounced)
   const saveToLocalStorage = useCallback(() => {
     if (!user) return;
-    
+
     try {
       const draftData = {
         formData: formDataRef.current,
@@ -135,7 +135,7 @@ export default function CostSheetForm() {
     }
 
     setAutoSaveStatus('saving');
-    
+
     try {
       const calculations = calculateWithCurrentData();
       const now = new Date().toISOString();
@@ -221,7 +221,7 @@ export default function CostSheetForm() {
       setLastSaved(new Date());
       setHasUnsavedChanges(false);
       console.log('Saved to database');
-      
+
       setTimeout(() => setAutoSaveStatus('idle'), 2000);
     } catch (error: any) {
       console.error('Auto-save to database failed:', error);
@@ -262,7 +262,7 @@ export default function CostSheetForm() {
   // Debounced auto-save setup
   useEffect(() => {
     if (initialLoadRef.current) return;
-    
+
     setHasUnsavedChanges(true);
 
     // Clear existing timers
@@ -895,29 +895,33 @@ export default function CostSheetForm() {
             <CardDescription>Based on on-road price</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="down_payment">Down Payment (%)</Label>
-              <Input
-                id="down_payment"
-                type="number"
-                min="0"
-                max="100"
-                step="0.1"
-                value={formData.down_payment_percent || 20}
-                onChange={(e) => updateField('down_payment_percent', parseFloat(e.target.value) || 0)}
-                placeholder="20"
-              />
-              {errors.down_payment_percent && <p className="text-xs text-destructive">{errors.down_payment_percent}</p>}
-              <p className="text-xs text-muted-foreground">
-                On {formatCurrency(calculations.on_road_price)}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label>Down Payment Amount</Label>
-              <div className="p-3 bg-muted rounded-lg font-medium">
-                {formatCurrency(calculations.down_payment_amount)}
+            {isAdmin && (
+              <div className="space-y-2">
+                <Label htmlFor="down_payment">Down Payment (%)</Label>
+                <Input
+                  id="down_payment"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={formData.down_payment_percent || 0}
+                  onChange={(e) => updateField('down_payment_percent', parseFloat(e.target.value) || 0)}
+                  placeholder="0"
+                />
+                {errors.down_payment_percent && <p className="text-xs text-destructive">{errors.down_payment_percent}</p>}
+                <p className="text-xs text-muted-foreground">
+                  On {formatCurrency(calculations.on_road_price)}
+                </p>
               </div>
-            </div>
+            )}
+            {isAdmin && (
+              <div className="space-y-2">
+                <Label>Down Payment Amount</Label>
+                <div className="p-3 bg-muted rounded-lg font-medium">
+                  {formatCurrency(calculations.down_payment_amount)}
+                </div>
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Loan Amount</Label>
               <div className="p-3 bg-muted rounded-lg font-medium">
@@ -950,7 +954,7 @@ export default function CostSheetForm() {
               <div className="text-xs text-muted-foreground mt-2 p-2 bg-muted/50 rounded">
                 <strong>Loan breakdown:</strong> On-road price {formatCurrency(calculations.on_road_price)}
                 (Ex-showroom {formatCurrency(formData.ex_showroom_price)} + Insurance {formatCurrency(calculations.insurance_amount * 12)} + Registration {formatCurrency(formData.registration_charges)})
-                - Down payment {formatCurrency(calculations.down_payment_amount)}
+                {calculations.down_payment_amount > 0 && ` - Down payment ${formatCurrency(calculations.down_payment_amount)}`}
               </div>
             </div>
 
@@ -1221,7 +1225,7 @@ export default function CostSheetForm() {
 
       {/* Navigation Blocker Dialog */}
       {blocker.state === 'blocked' && (
-        <AlertDialog open={true} onOpenChange={() => {}}>
+        <AlertDialog open={true} onOpenChange={() => { }}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
