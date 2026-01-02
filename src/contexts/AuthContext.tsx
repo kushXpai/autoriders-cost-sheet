@@ -15,7 +15,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  // Load user from localStorage on first render
+  // Initialize state from localStorage
   const [user, setUser] = useState<User | null>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('user');
@@ -24,9 +24,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return null;
   });
 
-  // Fetch Supabase session & user profile
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    const fetchSession = async () => {
+    const init = async () => {
       try {
         const { data } = await supabase.auth.getSession();
 
@@ -38,28 +39,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             .eq('id', data.session.user.id)
             .single<User>();
 
-          if (error && error.code !== 'PGRST116') {
-            console.error('Error fetching profile:', error.message);
-          }
-
-          // If profile exists, use it; else fallback to Supabase user object
-          const userProfile = profile || {
+          // If row exists, use it; if not, fallback to minimal user object
+          const currentUser = profile || {
             id: data.session.user.id,
             email: data.session.user.email || '',
-            role: 'USER',
+            full_name: data.session.user.email || '',
+            role: 'STAFF',
           };
 
-          setUser(userProfile);
-          localStorage.setItem('user', JSON.stringify(userProfile));
+          setUser(currentUser);
+          localStorage.setItem('user', JSON.stringify(currentUser));
         }
       } catch (err) {
-        console.error('Failed to fetch session:', err);
+        console.error('Error fetching session/profile:', err);
+        setUser(null);
+        localStorage.removeItem('user');
+      } finally {
+        setLoading(false);
       }
     };
 
-    fetchSession();
+    init();
 
-    // Listen to auth changes
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         supabase
@@ -67,19 +68,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .select('*')
           .eq('id', session.user.id)
           .single<User>()
-          .then(({ data: profile, error }) => {
-            const userProfile = profile || {
+          .then(({ data: profile }) => {
+            const currentUser = profile || {
               id: session.user.id,
               email: session.user.email || '',
-              role: 'USER',
+              full_name: session.user.email || '',
+              role: 'STAFF',
             };
-
-            setUser(userProfile);
-            localStorage.setItem('user', JSON.stringify(userProfile));
-
-            if (error && error.code !== 'PGRST116') {
-              console.error('Error fetching profile on auth change:', error.message);
-            }
+            setUser(currentUser);
+            localStorage.setItem('user', JSON.stringify(currentUser));
           });
       } else {
         setUser(null);
@@ -92,7 +89,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  // Login function
   const login = async (email: string, password: string) => {
     try {
       const profile = await supabaseSignIn(email, password);
@@ -107,21 +103,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Logout function
   const logout = async () => {
     await supabaseSignOut();
     setUser(null);
     localStorage.removeItem('user');
   };
 
-  // Role helpers
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
   const isSuperAdmin = user?.role === 'SUPERADMIN';
   const isAuthenticated = !!user;
 
+  // Return loading state so UI can wait before rendering
   return (
     <AuthContext.Provider value={{ user, login, logout, isAdmin, isSuperAdmin, isAuthenticated }}>
-      {children}
+      {loading ? <div className="text-center py-12">Loading...</div> : children}
     </AuthContext.Provider>
   );
 };
