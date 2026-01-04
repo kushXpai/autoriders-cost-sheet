@@ -63,7 +63,7 @@ export default function Login() {
             />
           </div>
           <h1 className="text-2xl font-display font-bold text-foreground">
-            Autoriders Cost Sheet Management
+            Cost Sheet Management
           </h1>
           <p className="text-muted-foreground mt-2">
             Sign in to manage cost sheets and approvals

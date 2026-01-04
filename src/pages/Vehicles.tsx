@@ -14,6 +14,23 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -29,7 +46,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, Car } from 'lucide-react';
+import { Plus, Pencil, Trash2, Car, MoreVertical, Power, PowerOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/supabase/client';
 import type { Vehicle, FuelType } from '@/types';
@@ -42,6 +59,8 @@ export default function Vehicles() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [vehicleToDelete, setVehicleToDelete] = useState<Vehicle | null>(null);
   const [formData, setFormData] = useState({
     brand_name: '',
     model_name: '',
@@ -156,22 +175,38 @@ export default function Vehicles() {
         .eq('id', vehicle.id);
       if (error) throw error;
       fetchVehicles();
-      toast({ title: 'Vehicle status updated' });
+      toast({ 
+        title: vehicle.is_active ? 'Vehicle deactivated' : 'Vehicle activated',
+        description: `${vehicle.brand_name} ${vehicle.model_name} is now ${!vehicle.is_active ? 'active' : 'inactive'}`
+      });
     } catch (err: any) {
       console.error('Error updating vehicle status:', err);
       toast({ title: 'Error updating status', description: err.message, variant: 'destructive' });
     }
   };
 
-  const handleDelete = async (vehicle: Vehicle) => {
+  const handleDeleteClick = (vehicle: Vehicle) => {
+    setVehicleToDelete(vehicle);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!vehicleToDelete) return;
+    
     try {
-      const { error } = await supabase.from('vehicles').delete().eq('id', vehicle.id);
+      const { error } = await supabase.from('vehicles').delete().eq('id', vehicleToDelete.id);
       if (error) throw error;
       fetchVehicles();
-      toast({ title: 'Vehicle deleted successfully' });
+      toast({ 
+        title: 'Vehicle deleted successfully',
+        description: `${vehicleToDelete.brand_name} ${vehicleToDelete.model_name} has been removed`
+      });
     } catch (err: any) {
       console.error('Error deleting vehicle:', err);
       toast({ title: 'Error deleting vehicle', description: err.message, variant: 'destructive' });
+    } finally {
+      setDeleteDialogOpen(false);
+      setVehicleToDelete(null);
     }
   };
 
@@ -358,21 +393,44 @@ export default function Vehicles() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(vehicle)}>
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          {isAdmin && (
-                            <>
-                              <Button variant="ghost" size="sm" onClick={() => handleToggleActive(vehicle)}>
-                                {vehicle.is_active ? 'Deactivate' : 'Activate'}
-                              </Button>
-                              <Button variant="ghost" size="sm" onClick={() => handleDelete(vehicle)}>
-                                <Trash2 className="w-4 h-4 text-destructive" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreVertical className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleOpenDialog(vehicle)}>
+                              <Pencil className="w-4 h-4 mr-2" />
+                              Edit Vehicle
+                            </DropdownMenuItem>
+                            {isAdmin && (
+                              <>
+                                <DropdownMenuItem onClick={() => handleToggleActive(vehicle)}>
+                                  {vehicle.is_active ? (
+                                    <>
+                                      <PowerOff className="w-4 h-4 mr-2" />
+                                      Deactivate
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Power className="w-4 h-4 mr-2" />
+                                      Activate
+                                    </>
+                                  )}
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  onClick={() => handleDeleteClick(vehicle)}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Delete Vehicle
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -382,6 +440,24 @@ export default function Vehicles() {
           )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <strong>{vehicleToDelete?.brand_name} {vehicleToDelete?.model_name}</strong> from the system. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete Vehicle
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
