@@ -14,7 +14,7 @@ import { formatCurrency } from '@/lib/calculations';
 import type { CostSheet, Vehicle } from '@/types';
 
 export default function CostSheets() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -28,6 +28,9 @@ export default function CostSheets() {
   const [selectedSheetToCopy, setSelectedSheetToCopy] = useState<CostSheet | null>(null);
   const [newCompanyName, setNewCompanyName] = useState<string>('');
   const [copying, setCopying] = useState<boolean>(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState<boolean>(false);
+  const [selectedSheetToDelete, setSelectedSheetToDelete] = useState<CostSheet | null>(null);
+  const [deleting, setDeleting] = useState<boolean>(false);
 
   useEffect(() => {
     if (statusParam) {
@@ -96,6 +99,47 @@ export default function CostSheets() {
     setOpenMenuId(null);
   };
 
+  const handleDeleteClick = (sheet: CostSheet) => {
+    setSelectedSheetToDelete(sheet);
+    setDeleteDialogOpen(true);
+    setOpenMenuId(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!selectedSheetToDelete) return;
+
+    setDeleting(true);
+
+    try {
+      const { error } = await supabase
+        .from('cost_sheets')
+        .delete()
+        .eq('id', selectedSheetToDelete.id);
+
+      if (error) throw error;
+
+      // Remove from the list
+      setCostSheets(costSheets.filter(s => s.id !== selectedSheetToDelete.id));
+
+      toast({
+        title: "Success",
+        description: "Cost sheet deleted successfully",
+      });
+
+      setDeleteDialogOpen(false);
+      setSelectedSheetToDelete(null);
+    } catch (error: any) {
+      console.error('Error deleting cost sheet:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete cost sheet",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleCreateCopy = async () => {
     if (!selectedSheetToCopy || !newCompanyName.trim()) {
       toast({
@@ -116,6 +160,7 @@ export default function CostSheets() {
         ...sheetData,
         company_name: newCompanyName.trim(),
         status: 'DRAFT',
+        created_by: user?.id, // Set the current user as creator
       };
 
       const { data, error } = await supabase
@@ -252,6 +297,12 @@ export default function CostSheets() {
                           >
                             Make a Copy
                           </button>
+                          <button
+                            className="block w-full text-left px-4 py-2 hover:bg-gray-100 text-destructive"
+                            onClick={() => handleDeleteClick(sheet)}
+                          >
+                            Delete
+                          </button>
                         </div>
                       )}
                     </div>
@@ -307,6 +358,43 @@ export default function CostSheets() {
               disabled={copying || !newCompanyName.trim()}
             >
               {copying ? 'Creating...' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Cost Sheet Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Cost Sheet</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this cost sheet? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedSheetToDelete && (
+            <div className="py-4">
+              <div className="text-sm space-y-1">
+                <p><span className="text-muted-foreground">Company:</span> <span className="font-medium">{selectedSheetToDelete.company_name}</span></p>
+                <p><span className="text-muted-foreground">Vehicle:</span> <span className="font-medium">{getVehicleName(selectedSheetToDelete.vehicle_id)}</span></p>
+                <p><span className="text-muted-foreground">Amount:</span> <span className="font-medium">{formatCurrency(selectedSheetToDelete.grand_total)}</span></p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>
