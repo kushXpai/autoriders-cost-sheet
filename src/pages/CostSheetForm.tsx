@@ -1,3 +1,4 @@
+// src/pages/CostSheetForm.tsx
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useParams, useBlocker } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -87,10 +88,10 @@ export default function CostSheetForm() {
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [showRestoreDialog, setShowRestoreDialog] = useState(false);
-  const [draftToRestore, setDraftToRestore] = useState<any>(null);
+  // const [showRestoreDialog, setShowRestoreDialog] = useState(false);
+  // const [draftToRestore, setDraftToRestore] = useState<any>(null);
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const localStorageTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // const localStorageTimerRef = useRef<NodeJS.Timeout | null>(null);
   const initialLoadRef = useRef(true);
   const formDataRef = useRef(formData);
 
@@ -107,31 +108,32 @@ export default function CostSheetForm() {
   );
 
   // localStorage key
-  const getLocalStorageKey = () => `costsheet_draft_${user?.id || 'temp'}`;
+  // const getLocalStorageKey = () => `costsheet_draft_${user?.id || 'temp'}`;
 
   // Save to localStorage (debounced)
-  const saveToLocalStorage = useCallback(() => {
-    if (!user) return;
+  // const saveToLocalStorage = useCallback(() => {
+  //   if (!user) return;
 
-    try {
-      const draftData = {
-        formData: formDataRef.current,
-        selectedCity,
-        timestamp: new Date().toISOString(),
-        isEditing,
-        editingId: id,
-      };
-      localStorage.setItem(getLocalStorageKey(), JSON.stringify(draftData));
-      console.log('Saved to localStorage');
-    } catch (error) {
-      console.error('Failed to save to localStorage:', error);
-    }
-  }, [user, selectedCity, isEditing, id]);
+  //   try {
+  //     const draftData = {
+  //       formData: formDataRef.current,
+  //       selectedCity,
+  //       timestamp: new Date().toISOString(),
+  //       isEditing,
+  //       editingId: id,
+  //     };
+  //     localStorage.setItem(getLocalStorageKey(), JSON.stringify(draftData));
+  //     console.log('Saved to localStorage');
+  //   } catch (error) {
+  //     console.error('Failed to save to localStorage:', error);
+  //   }
+  // }, [user, selectedCity, isEditing, id]);
 
   // Save to database as DRAFT
+  // Save to database as DRAFT
   const saveToDatabase = useCallback(async () => {
-    if (!user || !formDataRef.current.company_name) {
-      return; // Don't save empty forms
+    if (!user || !formDataRef.current.company_name || !formDataRef.current.vehicle_id) {
+      return; // Don't save empty or incomplete forms
     }
 
     setAutoSaveStatus('saving');
@@ -207,7 +209,7 @@ export default function CostSheetForm() {
           .select()
           .single();
       } else {
-        // Check if auto-draft exists
+        // Check if auto-draft exists for this user
         const { data: existingDrafts } = await supabase
           .from('cost_sheets')
           .select('id')
@@ -239,7 +241,7 @@ export default function CostSheetForm() {
       setAutoSaveStatus('saved');
       setLastSaved(new Date());
       setHasUnsavedChanges(false);
-      console.log('Saved to database');
+      console.log('Auto-saved to database:', result.data?.id);
 
       setTimeout(() => setAutoSaveStatus('idle'), 2000);
     } catch (error: any) {
@@ -247,7 +249,7 @@ export default function CostSheetForm() {
       setAutoSaveStatus('error');
       setTimeout(() => setAutoSaveStatus('idle'), 3000);
     }
-  }, [user, isEditing, id]);
+  }, [user, isEditing, id, vehicles, interestRate, adminChargePercent, insuranceRate, fuelRate]);
 
   // Helper to calculate with current data
   const calculateWithCurrentData = () => {
@@ -297,125 +299,118 @@ export default function CostSheetForm() {
     };
   };
 
-  // Debounced auto-save setup
+  // Debounced auto-save to database only (every 2 seconds of inactivity)
   useEffect(() => {
     if (initialLoadRef.current) return;
 
     setHasUnsavedChanges(true);
 
-    // Clear existing timers
-    if (localStorageTimerRef.current) clearTimeout(localStorageTimerRef.current);
+    // Clear existing timer
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
 
-    // Save to localStorage after 2 seconds of inactivity
-    localStorageTimerRef.current = setTimeout(() => {
-      saveToLocalStorage();
-    }, 1000);
-
-    // Save to database after 60 seconds of inactivity
+    // Save to database after 2 seconds of inactivity
     autoSaveTimerRef.current = setTimeout(() => {
       saveToDatabase();
-    }, 5000);
+    }, 2000);
 
     return () => {
-      if (localStorageTimerRef.current) clearTimeout(localStorageTimerRef.current);
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
-  }, [formData, selectedCity, saveToLocalStorage, saveToDatabase]);
+  }, [formData, selectedCity, saveToDatabase]);
 
   // Check for existing drafts on mount
-  useEffect(() => {
-    const checkForDrafts = async () => {
-      if (!user || isEditing) return;
+  // useEffect(() => {
+  //   const checkForDrafts = async () => {
+  //     if (!user || isEditing) return;
 
-      try {
-        // Check localStorage
-        const localDraft = localStorage.getItem(getLocalStorageKey());
-        let localData = null;
-        let localTimestamp = null;
+  //     try {
+  //       // Check localStorage
+  //       const localDraft = localStorage.getItem(getLocalStorageKey());
+  //       let localData = null;
+  //       let localTimestamp = null;
 
-        if (localDraft) {
-          const parsed = JSON.parse(localDraft);
-          localData = parsed;
-          localTimestamp = new Date(parsed.timestamp);
-        }
+  //       if (localDraft) {
+  //         const parsed = JSON.parse(localDraft);
+  //         localData = parsed;
+  //         localTimestamp = new Date(parsed.timestamp);
+  //       }
 
-        // Check database
-        const { data: dbDrafts } = await supabase
-          .from('cost_sheets')
-          .select('*')
-          .eq('created_by', user.id)
-          .eq('status', 'DRAFT')
-          .order('updated_at', { ascending: false })
-          .limit(1);
+  //       // Check database
+  //       const { data: dbDrafts } = await supabase
+  //         .from('cost_sheets')
+  //         .select('*')
+  //         .eq('created_by', user.id)
+  //         .eq('status', 'DRAFT')
+  //         .order('updated_at', { ascending: false })
+  //         .limit(1);
 
-        const dbDraft = dbDrafts && dbDrafts.length > 0 ? dbDrafts[0] : null;
-        const dbTimestamp = dbDraft ? new Date(dbDraft.updated_at) : null;
+  //       const dbDraft = dbDrafts && dbDrafts.length > 0 ? dbDrafts[0] : null;
+  //       const dbTimestamp = dbDraft ? new Date(dbDraft.updated_at) : null;
 
-        // Compare timestamps and show restore dialog
-        if (localData && dbDraft) {
-          const newerDraft = localTimestamp && dbTimestamp && localTimestamp > dbTimestamp ? localData : dbDraft;
-          setDraftToRestore(newerDraft);
-          setShowRestoreDialog(true);
-        } else if (localData) {
-          setDraftToRestore(localData);
-          setShowRestoreDialog(true);
-        } else if (dbDraft) {
-          setDraftToRestore(dbDraft);
-          setShowRestoreDialog(true);
-        }
-      } catch (error) {
-        console.error('Error checking for drafts:', error);
-      }
-    };
+  //       // Compare timestamps and show restore dialog
+  //       if (localData && dbDraft) {
+  //         const newerDraft = localTimestamp && dbTimestamp && localTimestamp > dbTimestamp ? localData : dbDraft;
+  //         setDraftToRestore(newerDraft);
+  //         setShowRestoreDialog(true);
+  //       } else if (localData) {
+  //         setDraftToRestore(localData);
+  //         setShowRestoreDialog(true);
+  //       } else if (dbDraft) {
+  //         setDraftToRestore(dbDraft);
+  //         setShowRestoreDialog(true);
+  //       }
+  //     } catch (error) {
+  //       console.error('Error checking for drafts:', error);
+  //     }
+  //   };
 
-    checkForDrafts();
-  }, [user, isEditing]);
+  //   checkForDrafts();
+  // }, [user, isEditing]);
 
   // Restore draft
-  const restoreDraft = () => {
-    if (!draftToRestore) return;
+  // const restoreDraft = () => {
+  //   if (!draftToRestore) return;
 
-    if ('formData' in draftToRestore) {
-      // localStorage draft
-      setFormData(draftToRestore.formData);
-      setSelectedCity(draftToRestore.selectedCity);
-    } else {
-      // database draft - ensure all values are valid numbers
-      const onRoadPrice = draftToRestore.on_road_price || 1; // Avoid division by zero
-      const downPaymentPercent = draftToRestore.down_payment_amount && onRoadPrice > 0
-        ? (draftToRestore.down_payment_amount / onRoadPrice) * 100
-        : 0;
+  //   if ('formData' in draftToRestore) {
+  //     // localStorage draft
+  //     setFormData(draftToRestore.formData);
+  //     setSelectedCity(draftToRestore.selectedCity);
+  //   } else {
+  //     // database draft - ensure all values are valid numbers
+  //     const onRoadPrice = draftToRestore.on_road_price || 1; // Avoid division by zero
+  //     const downPaymentPercent = draftToRestore.down_payment_amount && onRoadPrice > 0
+  //       ? (draftToRestore.down_payment_amount / onRoadPrice) * 100
+  //       : 0;
 
-      setFormData({
-        company_name: draftToRestore.company_name || '',
-        vehicle_id: draftToRestore.vehicle_id || '',
-        tenure_years: draftToRestore.tenure_years || 3,
-        ex_showroom_price: draftToRestore.ex_showroom_price || 0,
-        down_payment_percent: isNaN(downPaymentPercent) ? 0 : downPaymentPercent,
-        registration_charges: draftToRestore.registration_charges || 0,
-        monthly_km: draftToRestore.monthly_km || 3000,
-        daily_hours: draftToRestore.daily_hours || 8,
-        drivers_count: draftToRestore.drivers_count || 1,
-        driver_salary_per_driver: draftToRestore.driver_salary_per_driver || 15000,
-        parking_charges: draftToRestore.parking_charges || 0,
-        maintenance_cost: draftToRestore.maintenance_cost || 0,
-        supervisor_cost: draftToRestore.supervisor_cost || 0,
-        gps_camera_cost: draftToRestore.gps_camera_cost || 0,
-        permit_cost: draftToRestore.permit_cost || 0,
-      });
-    }
+  //     setFormData({
+  //       company_name: draftToRestore.company_name || '',
+  //       vehicle_id: draftToRestore.vehicle_id || '',
+  //       tenure_years: draftToRestore.tenure_years || 3,
+  //       ex_showroom_price: draftToRestore.ex_showroom_price || 0,
+  //       down_payment_percent: isNaN(downPaymentPercent) ? 0 : downPaymentPercent,
+  //       registration_charges: draftToRestore.registration_charges || 0,
+  //       monthly_km: draftToRestore.monthly_km || 3000,
+  //       daily_hours: draftToRestore.daily_hours || 8,
+  //       drivers_count: draftToRestore.drivers_count || 1,
+  //       driver_salary_per_driver: draftToRestore.driver_salary_per_driver || 15000,
+  //       parking_charges: draftToRestore.parking_charges || 0,
+  //       maintenance_cost: draftToRestore.maintenance_cost || 0,
+  //       supervisor_cost: draftToRestore.supervisor_cost || 0,
+  //       gps_camera_cost: draftToRestore.gps_camera_cost || 0,
+  //       permit_cost: draftToRestore.permit_cost || 0,
+  //     });
+  //   }
 
-    setShowRestoreDialog(false);
-    setDraftToRestore(null);
-    toast({ title: 'Draft restored', description: 'Your unsaved work has been recovered' });
-  };
+  //   setShowRestoreDialog(false);
+  //   setDraftToRestore(null);
+  //   toast({ title: 'Draft restored', description: 'Your unsaved work has been recovered' });
+  // };
 
-  const discardDraft = () => {
-    localStorage.removeItem(getLocalStorageKey());
-    setShowRestoreDialog(false);
-    setDraftToRestore(null);
-  };
+  // const discardDraft = () => {
+  //   localStorage.removeItem(getLocalStorageKey());
+  //   setShowRestoreDialog(false);
+  //   setDraftToRestore(null);
+  // };
 
   useEffect(() => {
     fetchCities();
@@ -723,7 +718,7 @@ export default function CostSheetForm() {
       }
 
       // Clear localStorage and auto-save state
-      localStorage.removeItem(getLocalStorageKey());
+      // localStorage.removeItem(getLocalStorageKey());
       setHasUnsavedChanges(false);
 
       if (finalStatus === 'PENDING_APPROVAL' && result.data) {
@@ -1271,7 +1266,7 @@ export default function CostSheetForm() {
       </div>
 
       {/* Draft Restore Dialog */}
-      <AlertDialog open={showRestoreDialog} onOpenChange={setShowRestoreDialog}>
+      {/* <AlertDialog open={showRestoreDialog} onOpenChange={setShowRestoreDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Restore Unsaved Draft?</AlertDialogTitle>
@@ -1288,7 +1283,7 @@ export default function CostSheetForm() {
             <AlertDialogAction onClick={restoreDraft}>Restore</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog>
+      </AlertDialog> */}
 
       {/* Navigation Blocker Dialog */}
       {blocker.state === 'blocked' && (
