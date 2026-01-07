@@ -88,6 +88,7 @@ export default function CostSheetForm() {
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [autoSavedDraftId, setAutoSavedDraftId] = useState<string | null>(null);
   // const [showRestoreDialog, setShowRestoreDialog] = useState(false);
   // const [draftToRestore, setDraftToRestore] = useState<any>(null);
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -201,6 +202,7 @@ export default function CostSheetForm() {
 
       let result;
       if (isEditing && id) {
+        // If editing an existing cost sheet, update it
         result = await supabase
           .from('cost_sheets')
           .update({ ...costSheetData, updated_at: now })
@@ -208,31 +210,25 @@ export default function CostSheetForm() {
           .eq('created_by', user.id)
           .select()
           .single();
-      } else {
-        // Check if auto-draft exists for this user
-        const { data: existingDrafts } = await supabase
+      } else if (autoSavedDraftId) {
+        // If we have an auto-saved draft ID, update that draft
+        result = await supabase
           .from('cost_sheets')
-          .select('id')
+          .update({ ...costSheetData, updated_at: now })
+          .eq('id', autoSavedDraftId)
           .eq('created_by', user.id)
-          .eq('status', 'DRAFT')
-          .eq('company_name', formDataRef.current.company_name.trim())
-          .limit(1);
-
-        if (existingDrafts && existingDrafts.length > 0) {
-          // Update existing draft
-          result = await supabase
-            .from('cost_sheets')
-            .update({ ...costSheetData, updated_at: now })
-            .eq('id', existingDrafts[0].id)
-            .select()
-            .single();
-        } else {
-          // Create new draft
-          result = await supabase
-            .from('cost_sheets')
-            .insert(costSheetData)
-            .select()
-            .single();
+          .select()
+          .single();
+      } else {
+        // Create new draft and store its ID
+        result = await supabase
+          .from('cost_sheets')
+          .insert(costSheetData)
+          .select()
+          .single();
+        
+        if (result.data?.id) {
+          setAutoSavedDraftId(result.data.id);
         }
       }
 
@@ -698,14 +694,35 @@ export default function CostSheetForm() {
       };
 
       let result;
-      if (isEditing) {
+      if (isEditing && id) {
+        // If editing an existing cost sheet, update it
         result = await supabase
           .from('cost_sheets')
           .update({ ...costSheetData, updated_at: now })
-          .eq('id', id!)
+          .eq('id', id)
           .select()
           .single();
+      } else if (autoSavedDraftId && finalStatus === 'DRAFT') {
+        // If we have an auto-saved draft and we're saving as draft, update that draft
+        result = await supabase
+          .from('cost_sheets')
+          .update({ ...costSheetData, updated_at: now })
+          .eq('id', autoSavedDraftId)
+          .select()
+          .single();
+      } else if (autoSavedDraftId && finalStatus === 'PENDING_APPROVAL') {
+        // If we have an auto-saved draft but submitting for approval, update the draft and change status
+        result = await supabase
+          .from('cost_sheets')
+          .update({ ...costSheetData, updated_at: now })
+          .eq('id', autoSavedDraftId)
+          .select()
+          .single();
+        
+        // Clear the draft ID since it's no longer a draft
+        setAutoSavedDraftId(null);
       } else {
+        // Create new cost sheet
         result = await supabase
           .from('cost_sheets')
           .insert(costSheetData)
@@ -720,6 +737,7 @@ export default function CostSheetForm() {
       // Clear localStorage and auto-save state
       // localStorage.removeItem(getLocalStorageKey());
       setHasUnsavedChanges(false);
+      setAutoSavedDraftId(null); // Clear the draft ID after successful save
 
       if (finalStatus === 'PENDING_APPROVAL' && result.data) {
         try {
