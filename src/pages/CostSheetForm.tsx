@@ -95,11 +95,16 @@ export default function CostSheetForm() {
   // const localStorageTimerRef = useRef<NodeJS.Timeout | null>(null);
   const initialLoadRef = useRef(true);
   const formDataRef = useRef(formData);
+  const autoSavedDraftIdRef = useRef<string | null>(null);
 
   // Update ref whenever formData changes
   useEffect(() => {
     formDataRef.current = formData;
   }, [formData]);
+
+  useEffect(() => {
+    autoSavedDraftIdRef.current = autoSavedDraftId;
+  }, [autoSavedDraftId]);
 
   // Block navigation if unsaved changes
   const blocker = useBlocker(
@@ -201,6 +206,8 @@ export default function CostSheetForm() {
       };
 
       let result;
+      const currentDraftId = autoSavedDraftIdRef.current; // USE REF HERE
+
       if (isEditing && id) {
         // If editing an existing cost sheet, update it
         result = await supabase
@@ -210,12 +217,12 @@ export default function CostSheetForm() {
           .eq('created_by', user.id)
           .select()
           .single();
-      } else if (autoSavedDraftId) {
+      } else if (currentDraftId) { // USE REF VALUE HERE
         // If we have an auto-saved draft ID, update that draft
         result = await supabase
           .from('cost_sheets')
           .update({ ...costSheetData, updated_at: now })
-          .eq('id', autoSavedDraftId)
+          .eq('id', currentDraftId) // USE REF VALUE HERE
           .eq('created_by', user.id)
           .select()
           .single();
@@ -226,9 +233,10 @@ export default function CostSheetForm() {
           .insert(costSheetData)
           .select()
           .single();
-        
+
         if (result.data?.id) {
           setAutoSavedDraftId(result.data.id);
+          autoSavedDraftIdRef.current = result.data.id; // ALSO UPDATE REF IMMEDIATELY
         }
       }
 
@@ -702,23 +710,23 @@ export default function CostSheetForm() {
           .eq('id', id)
           .select()
           .single();
-      } else if (autoSavedDraftId && finalStatus === 'DRAFT') {
+      } else if (autoSavedDraftIdRef.current && finalStatus === 'DRAFT') {
         // If we have an auto-saved draft and we're saving as draft, update that draft
         result = await supabase
           .from('cost_sheets')
           .update({ ...costSheetData, updated_at: now })
-          .eq('id', autoSavedDraftId)
+          .eq('id', autoSavedDraftIdRef.current)
           .select()
           .single();
-      } else if (autoSavedDraftId && finalStatus === 'PENDING_APPROVAL') {
+      } else if (autoSavedDraftIdRef.current && finalStatus === 'PENDING_APPROVAL') {
         // If we have an auto-saved draft but submitting for approval, update the draft and change status
         result = await supabase
           .from('cost_sheets')
           .update({ ...costSheetData, updated_at: now })
-          .eq('id', autoSavedDraftId)
+          .eq('id', autoSavedDraftIdRef.current)
           .select()
           .single();
-        
+
         // Clear the draft ID since it's no longer a draft
         setAutoSavedDraftId(null);
       } else {
