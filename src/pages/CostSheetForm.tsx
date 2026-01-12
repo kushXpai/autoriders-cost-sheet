@@ -247,7 +247,7 @@ export default function CostSheetForm() {
       setHasUnsavedChanges(false);
       console.log('Auto-saved to database:', result.data?.id);
 
-      setTimeout(() => setAutoSaveStatus('idle'), 2000);
+      setTimeout(() => setAutoSaveStatus('idle'), 1000);
     } catch (error: any) {
       console.error('Auto-save to database failed:', error);
       setAutoSaveStatus('error');
@@ -1270,14 +1270,14 @@ export default function CostSheetForm() {
             <Button variant="outline" onClick={() => navigate('/cost-sheets')} disabled={loading}>
               Cancel
             </Button>
-            <Button
+            {/* <Button
               variant="secondary"
               onClick={() => saveCostSheet('DRAFT')}
               disabled={loading || !user}
             >
               <Save className="w-4 h-4 mr-2" />
               {isEditing ? 'Save Changes (Draft)' : 'Save as Draft'}
-            </Button>
+            </Button> */}
             {!isEditing && (
               <Button
                 onClick={() => saveCostSheet('PENDING_APPROVAL')}
