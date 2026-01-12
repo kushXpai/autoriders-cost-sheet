@@ -167,6 +167,9 @@ export default function CostSheetForm() {
 
       const now = new Date().toISOString();
 
+      // Superadmin's own sheets are auto-approved, regular users save as DRAFT
+      const autoSaveStatus: CostSheetStatus = isAdmin ? 'APPROVED' : 'DRAFT';
+
       const costSheetData: Omit<CostSheet, 'id' | 'created_at' | 'updated_at'> = {
         company_name: formDataRef.current.company_name.trim(),
         vehicle_id: formDataRef.current.vehicle_id,
@@ -196,17 +199,17 @@ export default function CostSheetForm() {
         admin_charge_percent: safeCalculations.admin_charge_percent,
         admin_charge_amount: safeCalculations.admin_charge_amount,
         grand_total: safeCalculations.grand_total,
-        status: 'DRAFT',
-        approval_remarks: '',
-        submitted_at: null,
-        approved_at: null,
-        approved_by: null,
+        status: autoSaveStatus,
+        approval_remarks: isAdmin ? 'Auto-approved (Superadmin)' : '',
+        submitted_at: isAdmin ? now : null,
+        approved_at: isAdmin ? now : null,
+        approved_by: isAdmin ? user.id : null,
         pdf_url: null,
         created_by: user.id,
       };
 
       let result;
-      const currentDraftId = autoSavedDraftIdRef.current; // USE REF HERE
+      const currentDraftId = autoSavedDraftIdRef.current;
 
       if (isEditing && id) {
         // If editing an existing cost sheet, update it
@@ -217,12 +220,12 @@ export default function CostSheetForm() {
           .eq('created_by', user.id)
           .select()
           .single();
-      } else if (currentDraftId) { // USE REF VALUE HERE
+      } else if (currentDraftId) {
         // If we have an auto-saved draft ID, update that draft
         result = await supabase
           .from('cost_sheets')
           .update({ ...costSheetData, updated_at: now })
-          .eq('id', currentDraftId) // USE REF VALUE HERE
+          .eq('id', currentDraftId)
           .eq('created_by', user.id)
           .select()
           .single();
@@ -236,7 +239,7 @@ export default function CostSheetForm() {
 
         if (result.data?.id) {
           setAutoSavedDraftId(result.data.id);
-          autoSavedDraftIdRef.current = result.data.id; // ALSO UPDATE REF IMMEDIATELY
+          autoSavedDraftIdRef.current = result.data.id;
         }
       }
 
@@ -247,13 +250,13 @@ export default function CostSheetForm() {
       setHasUnsavedChanges(false);
       console.log('Auto-saved to database:', result.data?.id);
 
-      setTimeout(() => setAutoSaveStatus('idle'), 1000);
+      setTimeout(() => setAutoSaveStatus('idle'), 2000);
     } catch (error: any) {
       console.error('Auto-save to database failed:', error);
       setAutoSaveStatus('error');
       setTimeout(() => setAutoSaveStatus('idle'), 3000);
     }
-  }, [user, isEditing, id, vehicles, interestRate, adminChargePercent, insuranceRate, fuelRate]);
+  }, [user, isEditing, id, vehicles, interestRate, adminChargePercent, insuranceRate, fuelRate, isAdmin]);
 
   // Helper to calculate with current data
   const calculateWithCurrentData = () => {
@@ -662,16 +665,8 @@ export default function CostSheetForm() {
     try {
       const now = new Date().toISOString();
 
-      // Determine final status based on user role and action
-      let finalStatus: CostSheetStatus;
-      if (isEditing) {
-        finalStatus = 'DRAFT';
-      } else if (isAdmin && status === 'APPROVED') {
-        // Superadmin can directly approve
-        finalStatus = 'APPROVED';
-      } else {
-        finalStatus = status;
-      }
+      // Superadmin's own sheets are always APPROVED
+      const finalStatus: CostSheetStatus = isAdmin ? 'APPROVED' : status;
 
       const costSheetData: Omit<CostSheet, 'id' | 'created_at' | 'updated_at'> = {
         company_name: formData.company_name.trim(),
@@ -703,7 +698,7 @@ export default function CostSheetForm() {
         admin_charge_amount: calculations.admin_charge_amount,
         grand_total: calculations.grand_total,
         status: finalStatus,
-        approval_remarks: finalStatus === 'APPROVED' ? 'Auto-approved by superadmin' : '',
+        approval_remarks: isAdmin ? 'Auto-approved (Superadmin)' : '',
         submitted_at: finalStatus === 'PENDING_APPROVAL' || finalStatus === 'APPROVED' ? now : null,
         approved_at: finalStatus === 'APPROVED' ? now : null,
         approved_by: finalStatus === 'APPROVED' ? user.id : null,
@@ -722,16 +717,8 @@ export default function CostSheetForm() {
           .eq('id', id)
           .select()
           .single();
-      } else if (currentDraftId && finalStatus === 'DRAFT') {
-        // If we have an auto-saved draft and we're saving as draft, update that draft
-        result = await supabase
-          .from('cost_sheets')
-          .update({ ...costSheetData, updated_at: now })
-          .eq('id', currentDraftId)
-          .select()
-          .single();
-      } else if (currentDraftId && (finalStatus === 'PENDING_APPROVAL' || finalStatus === 'APPROVED')) {
-        // If we have an auto-saved draft but submitting/approving, update the draft and change status
+      } else if (currentDraftId) {
+        // If we have an auto-saved draft, update it
         result = await supabase
           .from('cost_sheets')
           .update({ ...costSheetData, updated_at: now })
@@ -739,7 +726,7 @@ export default function CostSheetForm() {
           .select()
           .single();
 
-        // Clear the draft ID since it's no longer a draft
+        // Clear the draft ID
         setAutoSavedDraftId(null);
         autoSavedDraftIdRef.current = null;
       } else {
@@ -760,8 +747,8 @@ export default function CostSheetForm() {
       setAutoSavedDraftId(null);
       autoSavedDraftIdRef.current = null;
 
-      // Send email notification for submissions (not for drafts or direct approvals by superadmin)
-      if (finalStatus === 'PENDING_APPROVAL' && result.data) {
+      // Send email notification only for regular users submitting for approval
+      if (!isAdmin && finalStatus === 'PENDING_APPROVAL' && result.data) {
         try {
           const { sendCostSheetSubmissionEmail } = await import('@/services/emailService');
           const vehicle = vehicles.find(v => v.id === formData.vehicle_id);
@@ -795,14 +782,20 @@ export default function CostSheetForm() {
           });
         }
       } else {
-        // Toast for other statuses
-        const toastMessages = {
-          DRAFT: isEditing ? 'Cost sheet updated and set to draft. Submit for approval when ready.' : 'Cost sheet saved as draft',
-          APPROVED: 'Cost sheet created and approved successfully',
+        // Toast for superadmin or drafts
+        const getMessage = () => {
+          if (isAdmin) {
+            return isEditing
+              ? 'Cost sheet updated and approved'
+              : 'Cost sheet created and approved';
+          }
+          return status === 'DRAFT'
+            ? 'Cost sheet saved as draft'
+            : 'Cost sheet submitted for approval';
         };
 
         toast({
-          title: toastMessages[finalStatus as 'DRAFT' | 'APPROVED'] || 'Cost sheet saved successfully'
+          title: getMessage()
         });
       }
 
@@ -1281,37 +1274,44 @@ export default function CostSheetForm() {
 
         {/* Action Buttons */}
         <div className="flex flex-col gap-3 pb-6">
-          {isEditing && (
+          {isAdmin && (
+            <p className="text-sm text-green-600 font-medium text-center">
+              ✓ As a superadmin, your cost sheets are automatically approved
+            </p>
+          )}
+          {isEditing && !isAdmin && (
             <p className="text-sm text-muted-foreground text-center">
               Editing will reset the cost sheet to Draft status. Submit for approval after saving.
             </p>
           )}
           <div className="flex gap-3 justify-end">
-            {/* <Button variant="outline" onClick={() => navigate('/cost-sheets')} disabled={loading}>
-              Cancel
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => saveCostSheet('DRAFT')}
-              disabled={loading || !user}
-            >
-              <Save className="w-4 h-4 mr-2" />
-              {isEditing ? 'Save Changes (Draft)' : 'Save as Draft'}
-            </Button> */}
-            {!isEditing && (
+            {!isAdmin && (
+              <Button variant="outline" onClick={() => navigate('/cost-sheets')} disabled={loading}>
+                Cancel
+              </Button>
+            )}
+            {isAdmin ? (
+              // Superadmin only sees one button - everything is auto-approved
+              <Button
+                onClick={() => saveCostSheet('APPROVED')}
+                disabled={loading || !user}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                {isEditing ? 'Save Changes' : 'Create Cost Sheet'}
+              </Button>
+            ) : (
+              // Regular users see Draft and Submit buttons
               <>
-                {isAdmin ? (
-                  // Superadmin sees "Submit & Approve" button
-                  <Button
-                    onClick={() => saveCostSheet('APPROVED')}
-                    disabled={loading || !user}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
-                    <CheckCircle2 className="w-4 h-4 mr-2" />
-                    Submit & Approve
-                  </Button>
-                ) : (
-                  // Regular users see "Submit for Approval" button
+                <Button
+                  variant="secondary"
+                  onClick={() => saveCostSheet('DRAFT')}
+                  disabled={loading || !user}
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {isEditing ? 'Save Changes (Draft)' : 'Save as Draft'}
+                </Button>
+                {!isEditing && (
                   <Button
                     onClick={() => saveCostSheet('PENDING_APPROVAL')}
                     disabled={loading || !user}
