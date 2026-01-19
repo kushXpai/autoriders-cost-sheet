@@ -119,6 +119,7 @@ export interface CostSheet {
 
   monthly_km: number;
   daily_hours: number;
+  mileage_per_liter: number;
   fuel_cost: number;
 
   drivers_count: number;
@@ -126,6 +127,7 @@ export interface CostSheet {
   total_driver_cost: number;
 
   parking_charges: number;
+  maintenance_cost_per_km: number;
   maintenance_cost: number;
   supervisor_cost: number;
   gps_camera_cost: number;
@@ -159,7 +161,6 @@ export interface CostSheetFormData {
 
   tenure_years: number;
 
-  // CHANGED: Renamed from vehicle_cost to ex_showroom_price
   ex_showroom_price: number;
 
   down_payment_percent: number;
@@ -168,11 +169,13 @@ export interface CostSheetFormData {
 
   monthly_km: number;
   daily_hours: number;
+  mileage_per_liter: number;
 
   drivers_count: number;
   driver_salary_per_driver: number;
 
   parking_charges: number;
+  maintenance_cost_per_km: number;
   maintenance_cost: number;
   supervisor_cost: number;
   gps_camera_cost: number;

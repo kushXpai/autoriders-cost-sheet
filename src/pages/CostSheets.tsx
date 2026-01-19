@@ -7,8 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { 
-  Plus, FileText, Clock, CheckCircle, XCircle, MoreHorizontal, Search, 
+import {
+  Plus, FileText, Clock, CheckCircle, XCircle, MoreHorizontal, Search,
   SortAsc, SortDesc, Calendar, DollarSign, Car, Filter, X, Copy, Trash2,
   Eye, Download, ArrowUpDown
 } from 'lucide-react';
@@ -115,7 +115,7 @@ export default function CostSheets() {
   // Apply sorting
   filteredSheets = [...filteredSheets].sort((a, b) => {
     let comparison = 0;
-    
+
     switch (sortBy) {
       case 'date':
         comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
@@ -127,7 +127,7 @@ export default function CostSheets() {
         comparison = a.company_name.localeCompare(b.company_name);
         break;
     }
-    
+
     return sortOrder === 'asc' ? comparison : -comparison;
   });
 
@@ -196,7 +196,7 @@ export default function CostSheets() {
 
     try {
       const { id, created_at, updated_at, ...sheetData } = selectedSheetToCopy;
-      
+
       const newSheet = {
         ...sheetData,
         company_name: newCompanyName.trim(),
@@ -338,8 +338,8 @@ export default function CostSheets() {
                     className="relative"
                   >
                     {btn.label}
-                    <Badge 
-                      variant="secondary" 
+                    <Badge
+                      variant="secondary"
                       className="ml-2 px-1.5 py-0 text-xs"
                     >
                       {btn.count}
@@ -368,7 +368,7 @@ export default function CostSheets() {
                   </button>
                 )}
               </div>
-              
+
               <div className="flex gap-2">
                 <Button
                   variant={sortBy === 'date' ? 'default' : 'outline'}
@@ -430,7 +430,7 @@ export default function CostSheets() {
                 {searchTerm ? 'No matching cost sheets' : 'No cost sheets found'}
               </h3>
               <p className="text-sm text-muted-foreground mb-4">
-                {searchTerm 
+                {searchTerm
                   ? 'Try adjusting your search or filters'
                   : 'Create your first cost sheet to get started'
                 }
@@ -476,7 +476,10 @@ export default function CostSheets() {
                           {getVehicleName(sheet.vehicle_id)}
                         </span>
                         <span>•</span>
-                        <span>{sheet.tenure_years} years {sheet.tenure_months > 0 && `${sheet.tenure_months} months`}</span>
+                        <span>
+                          {sheet.tenure_years} {sheet.tenure_years === 1 ? 'year' : 'years'}
+                          {sheet.tenure_months % 12 > 0 && ` ${sheet.tenure_months % 12} ${sheet.tenure_months % 12 === 1 ? 'month' : 'months'}`}
+                        </span>
                         <span>•</span>
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3 h-3" />

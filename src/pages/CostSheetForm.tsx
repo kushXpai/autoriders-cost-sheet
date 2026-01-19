@@ -65,6 +65,8 @@ export default function CostSheetForm() {
     registration_charges: 0,
     monthly_km: 3000,
     daily_hours: 8,
+    mileage_per_liter: 0,
+    maintenance_cost_per_km: 0,
     drivers_count: 1,
     driver_salary_per_driver: 15000,
     parking_charges: 0,
@@ -89,10 +91,7 @@ export default function CostSheetForm() {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [autoSavedDraftId, setAutoSavedDraftId] = useState<string | null>(null);
-  // const [showRestoreDialog, setShowRestoreDialog] = useState(false);
-  // const [draftToRestore, setDraftToRestore] = useState<any>(null);
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
-  // const localStorageTimerRef = useRef<NodeJS.Timeout | null>(null);
   const initialLoadRef = useRef(true);
   const formDataRef = useRef(formData);
   const autoSavedDraftIdRef = useRef<string | null>(null);
@@ -113,29 +112,21 @@ export default function CostSheetForm() {
       currentLocation.pathname !== nextLocation.pathname
   );
 
-  // localStorage key
-  // const getLocalStorageKey = () => `costsheet_draft_${user?.id || 'temp'}`;
+  // Auto-populate mileage and maintenance when vehicle is selected
+  useEffect(() => {
+    if (formData.vehicle_id && vehicles.length > 0 && !isEditing) {
+      const vehicle = vehicles.find(v => v.id === formData.vehicle_id);
+      if (vehicle) {
+        // Only auto-populate if fields are empty (0)
+        setFormData(prev => ({
+          ...prev,
+          mileage_per_liter: prev.mileage_per_liter || vehicle.mileage_km_per_unit,
+          maintenance_cost_per_km: prev.maintenance_cost_per_km || vehicle.maintenance_cost_per_km,
+        }));
+      }
+    }
+  }, [formData.vehicle_id, vehicles, isEditing]);
 
-  // Save to localStorage (debounced)
-  // const saveToLocalStorage = useCallback(() => {
-  //   if (!user) return;
-
-  //   try {
-  //     const draftData = {
-  //       formData: formDataRef.current,
-  //       selectedCity,
-  //       timestamp: new Date().toISOString(),
-  //       isEditing,
-  //       editingId: id,
-  //     };
-  //     localStorage.setItem(getLocalStorageKey(), JSON.stringify(draftData));
-  //     console.log('Saved to localStorage');
-  //   } catch (error) {
-  //     console.error('Failed to save to localStorage:', error);
-  //   }
-  // }, [user, selectedCity, isEditing, id]);
-
-  // Save to database as DRAFT
   // Save to database as DRAFT
   const saveToDatabase = useCallback(async () => {
     if (!user || !formDataRef.current.company_name || !formDataRef.current.vehicle_id) {
@@ -170,6 +161,9 @@ export default function CostSheetForm() {
       // Superadmin's own sheets are auto-approved, regular users save as DRAFT
       const autoSaveStatus: CostSheetStatus = isAdmin ? 'APPROVED' : 'DRAFT';
 
+      // Get selected vehicle for fallback values
+      const selectedVehicle = vehicles.find(v => v.id === formDataRef.current.vehicle_id);
+
       const costSheetData: Omit<CostSheet, 'id' | 'created_at' | 'updated_at'> = {
         company_name: formDataRef.current.company_name.trim(),
         vehicle_id: formDataRef.current.vehicle_id,
@@ -186,6 +180,8 @@ export default function CostSheetForm() {
         subtotal_a: safeCalculations.subtotal_a,
         monthly_km: formDataRef.current.monthly_km || 0,
         daily_hours: formDataRef.current.daily_hours || 0,
+        mileage_per_liter: formDataRef.current.mileage_per_liter || selectedVehicle?.mileage_km_per_unit || 0,
+        maintenance_cost_per_km: formDataRef.current.maintenance_cost_per_km || selectedVehicle?.maintenance_cost_per_km || 0,
         fuel_cost: safeCalculations.fuel_cost,
         drivers_count: formDataRef.current.drivers_count || 0,
         driver_salary_per_driver: formDataRef.current.driver_salary_per_driver || 0,
@@ -278,10 +274,10 @@ export default function CostSheetForm() {
     const subtotal_a = emi_amount;
 
     const selectedVehicle = vehicles.find(v => v.id === formDataRef.current.vehicle_id);
-    const mileage = selectedVehicle?.mileage_km_per_unit ?? 25;
+    const mileage = formDataRef.current.mileage_per_liter || selectedVehicle?.mileage_km_per_unit || 25;
     const monthly_km = formDataRef.current.monthly_km || 0;
     const fuel_cost = mileage > 0 ? (monthly_km / mileage) * fuelRate : 0;
-    const maintenance_cost_per_km = selectedVehicle?.maintenance_cost_per_km ?? 0;
+    const maintenance_cost_per_km = formDataRef.current.maintenance_cost_per_km || selectedVehicle?.maintenance_cost_per_km || 0;
     const maintenance_cost = monthly_km * maintenance_cost_per_km;
     const total_driver_cost = (formDataRef.current.drivers_count || 0) * (formDataRef.current.driver_salary_per_driver || 0);
     const subtotal_b = fuel_cost + total_driver_cost + maintenance_cost + (formDataRef.current.parking_charges || 0) + (formDataRef.current.supervisor_cost || 0) + (formDataRef.current.gps_camera_cost || 0) + (formDataRef.current.permit_cost || 0);
@@ -324,100 +320,6 @@ export default function CostSheetForm() {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
   }, [formData, selectedCity, saveToDatabase]);
-
-  // Check for existing drafts on mount
-  // useEffect(() => {
-  //   const checkForDrafts = async () => {
-  //     if (!user || isEditing) return;
-
-  //     try {
-  //       // Check localStorage
-  //       const localDraft = localStorage.getItem(getLocalStorageKey());
-  //       let localData = null;
-  //       let localTimestamp = null;
-
-  //       if (localDraft) {
-  //         const parsed = JSON.parse(localDraft);
-  //         localData = parsed;
-  //         localTimestamp = new Date(parsed.timestamp);
-  //       }
-
-  //       // Check database
-  //       const { data: dbDrafts } = await supabase
-  //         .from('cost_sheets')
-  //         .select('*')
-  //         .eq('created_by', user.id)
-  //         .eq('status', 'DRAFT')
-  //         .order('updated_at', { ascending: false })
-  //         .limit(1);
-
-  //       const dbDraft = dbDrafts && dbDrafts.length > 0 ? dbDrafts[0] : null;
-  //       const dbTimestamp = dbDraft ? new Date(dbDraft.updated_at) : null;
-
-  //       // Compare timestamps and show restore dialog
-  //       if (localData && dbDraft) {
-  //         const newerDraft = localTimestamp && dbTimestamp && localTimestamp > dbTimestamp ? localData : dbDraft;
-  //         setDraftToRestore(newerDraft);
-  //         setShowRestoreDialog(true);
-  //       } else if (localData) {
-  //         setDraftToRestore(localData);
-  //         setShowRestoreDialog(true);
-  //       } else if (dbDraft) {
-  //         setDraftToRestore(dbDraft);
-  //         setShowRestoreDialog(true);
-  //       }
-  //     } catch (error) {
-  //       console.error('Error checking for drafts:', error);
-  //     }
-  //   };
-
-  //   checkForDrafts();
-  // }, [user, isEditing]);
-
-  // Restore draft
-  // const restoreDraft = () => {
-  //   if (!draftToRestore) return;
-
-  //   if ('formData' in draftToRestore) {
-  //     // localStorage draft
-  //     setFormData(draftToRestore.formData);
-  //     setSelectedCity(draftToRestore.selectedCity);
-  //   } else {
-  //     // database draft - ensure all values are valid numbers
-  //     const onRoadPrice = draftToRestore.on_road_price || 1; // Avoid division by zero
-  //     const downPaymentPercent = draftToRestore.down_payment_amount && onRoadPrice > 0
-  //       ? (draftToRestore.down_payment_amount / onRoadPrice) * 100
-  //       : 0;
-
-  //     setFormData({
-  //       company_name: draftToRestore.company_name || '',
-  //       vehicle_id: draftToRestore.vehicle_id || '',
-  //       tenure_years: draftToRestore.tenure_years || 3,
-  //       ex_showroom_price: draftToRestore.ex_showroom_price || 0,
-  //       down_payment_percent: isNaN(downPaymentPercent) ? 0 : downPaymentPercent,
-  //       registration_charges: draftToRestore.registration_charges || 0,
-  //       monthly_km: draftToRestore.monthly_km || 3000,
-  //       daily_hours: draftToRestore.daily_hours || 8,
-  //       drivers_count: draftToRestore.drivers_count || 1,
-  //       driver_salary_per_driver: draftToRestore.driver_salary_per_driver || 15000,
-  //       parking_charges: draftToRestore.parking_charges || 0,
-  //       maintenance_cost: draftToRestore.maintenance_cost || 0,
-  //       supervisor_cost: draftToRestore.supervisor_cost || 0,
-  //       gps_camera_cost: draftToRestore.gps_camera_cost || 0,
-  //       permit_cost: draftToRestore.permit_cost || 0,
-  //     });
-  //   }
-
-  //   setShowRestoreDialog(false);
-  //   setDraftToRestore(null);
-  //   toast({ title: 'Draft restored', description: 'Your unsaved work has been recovered' });
-  // };
-
-  // const discardDraft = () => {
-  //   localStorage.removeItem(getLocalStorageKey());
-  //   setShowRestoreDialog(false);
-  //   setDraftToRestore(null);
-  // };
 
   useEffect(() => {
     fetchCities();
@@ -559,6 +461,8 @@ export default function CostSheetForm() {
           registration_charges: data.registration_charges || 0,
           monthly_km: data.monthly_km || 3000,
           daily_hours: data.daily_hours || 8,
+          mileage_per_liter: data.mileage_per_liter || 0,
+          maintenance_cost_per_km: data.maintenance_cost_per_km || 0,
           drivers_count: data.drivers_count || 1,
           driver_salary_per_driver: data.driver_salary_per_driver || 15000,
           parking_charges: data.parking_charges || 0,
@@ -603,10 +507,10 @@ export default function CostSheetForm() {
     const subtotal_a = emi_amount;
 
     const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id);
-    const mileage = selectedVehicle?.mileage_km_per_unit ?? 25;
+    const mileage = formData.mileage_per_liter || selectedVehicle?.mileage_km_per_unit || 25;
     const monthly_km = formData.monthly_km || 0;
     const fuel_cost = mileage > 0 ? (monthly_km / mileage) * fuelRate : 0;
-    const maintenance_cost_per_km = selectedVehicle?.maintenance_cost_per_km ?? 0;
+    const maintenance_cost_per_km = formData.maintenance_cost_per_km || selectedVehicle?.maintenance_cost_per_km || 0;
     const maintenance_cost = monthly_km * maintenance_cost_per_km;
     const total_driver_cost = (formData.drivers_count || 0) * (formData.driver_salary_per_driver || 0);
     const subtotal_b = fuel_cost + total_driver_cost + maintenance_cost + (formData.parking_charges || 0) + (formData.supervisor_cost || 0) + (formData.gps_camera_cost || 0) + (formData.permit_cost || 0);
@@ -684,6 +588,8 @@ export default function CostSheetForm() {
         subtotal_a: calculations.subtotal_a,
         monthly_km: formData.monthly_km,
         daily_hours: formData.daily_hours,
+        mileage_per_liter: formData.mileage_per_liter || selectedVehicle?.mileage_km_per_unit || 0,
+        maintenance_cost_per_km: formData.maintenance_cost_per_km || selectedVehicle?.maintenance_cost_per_km || 0,
         fuel_cost: calculations.fuel_cost,
         drivers_count: formData.drivers_count,
         driver_salary_per_driver: formData.driver_salary_per_driver,
@@ -1077,6 +983,66 @@ export default function CostSheetForm() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
+
+            {/* Vehicle Specifications - Editable */}
+            <div>
+              <h4 className="font-medium mb-3 text-muted-foreground">Vehicle Specifications</h4>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="mileage_per_liter">
+                    Mileage (km per {selectedVehicle?.fuel_type === 'EV' ? 'kWh' : 'Liter'})
+                  </Label>
+                  <Input
+                    id="mileage_per_liter"
+                    type="number"
+                    min="0.1"
+                    step="0.1"
+                    value={formData.mileage_per_liter || ''}
+                    onChange={(e) => updateField('mileage_per_liter', parseFloat(e.target.value) || 0)}
+                    placeholder={selectedVehicle?.mileage_km_per_unit?.toString() || '0'}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Default from vehicle: {selectedVehicle?.mileage_km_per_unit?.toFixed(2) || 'N/A'} km/{selectedVehicle?.fuel_type === 'EV' ? 'kWh' : 'L'}
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="maintenance_cost_per_km">
+                    Maintenance Cost (₹ per km)
+                  </Label>
+                  <Input
+                    id="maintenance_cost_per_km"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.maintenance_cost_per_km || ''}
+                    onChange={(e) => updateField('maintenance_cost_per_km', parseFloat(e.target.value) || 0)}
+                    placeholder={selectedVehicle?.maintenance_cost_per_km?.toString() || '0'}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Default from vehicle: {selectedVehicle?.maintenance_cost_per_km
+                      ? formatCurrency(selectedVehicle.maintenance_cost_per_km)
+                      : 'N/A'}
+                  </p>
+                </div>
+              </div>
+
+              {selectedVehicle && (
+                <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+                  <p className="text-sm text-blue-900 dark:text-blue-100">
+                    <strong>Selected Vehicle:</strong> {selectedVehicle.brand_name} {selectedVehicle.model_name} - {selectedVehicle.variant_name}
+                  </p>
+                  <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                    Fuel Type: {selectedVehicle.fuel_type} |
+                    Default Mileage: {selectedVehicle.mileage_km_per_unit} km/{selectedVehicle.fuel_type === 'EV' ? 'kWh' : 'L'} |
+                    Default Maintenance: {formatCurrency(selectedVehicle.maintenance_cost_per_km)}/km
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
             {/* Usage & Fuel */}
             <div>
               <h4 className="font-medium mb-3 text-muted-foreground">Usage & Fuel</h4>
@@ -1113,7 +1079,7 @@ export default function CostSheetForm() {
                   </div>
                   {selectedVehicle && selectedCity && (
                     <p className="text-xs text-muted-foreground">
-                      {formData.monthly_km.toFixed(0)} km ÷ {selectedVehicle.mileage_km_per_unit} km/{selectedVehicle.fuel_type === 'EV' ? 'kWh' : 'L'} @ {formatCurrency(fuelRate)}/{selectedVehicle.fuel_type === 'EV' ? 'kWh' : 'L'} in {selectedCity}
+                      {formData.monthly_km.toFixed(0)} km ÷ {formData.mileage_per_liter || selectedVehicle.mileage_km_per_unit} km/{selectedVehicle.fuel_type === 'EV' ? 'kWh' : 'L'} @ {formatCurrency(fuelRate)}/{selectedVehicle.fuel_type === 'EV' ? 'kWh' : 'L'} in {selectedCity}
                     </p>
                   )}
                 </div>
@@ -1172,11 +1138,9 @@ export default function CostSheetForm() {
                   <div className="p-3 bg-muted rounded-lg font-medium">
                     {formatCurrency(calculations.maintenance_cost)}
                   </div>
-                  {selectedVehicle && (
-                    <p className="text-xs text-muted-foreground">
-                      {formData.monthly_km.toFixed(0)} km × {formatCurrency(selectedVehicle.maintenance_cost_per_km)}/km
-                    </p>
-                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {formData.monthly_km.toFixed(0)} km × {formatCurrency(formData.maintenance_cost_per_km || selectedVehicle?.maintenance_cost_per_km || 0)}/km
+                  </p>
                 </div>
               </div>
             </div>
