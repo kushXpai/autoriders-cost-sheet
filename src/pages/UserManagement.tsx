@@ -36,6 +36,12 @@ import { useToast } from '@/hooks/use-toast';
 
 const USER_ROLES: UserRole[] = ['SUPERADMIN', 'ADMIN', 'STAFF'];
 
+const ROLE_LABELS: Record<UserRole, string> = {
+  SUPERADMIN: 'SUPER ADMIN',
+  ADMIN: 'ADMIN',
+  STAFF: 'MANAGER',
+};
+
 export default function UserManagement() {
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
@@ -311,7 +317,7 @@ export default function UserManagement() {
                       <TableCell>{u.email}</TableCell>
                       <TableCell>
                         <Badge variant={u.role === 'SUPERADMIN' ? 'default' : u.role === 'ADMIN' ? 'secondary' : 'outline'}>
-                          {u.role}
+                          {ROLE_LABELS[u.role]}
                         </Badge>
                       </TableCell>
                       <TableCell>
