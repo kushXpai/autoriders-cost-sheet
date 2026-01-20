@@ -326,8 +326,8 @@ export default function CostSheetDetail() {
             <DetailRow label="Down Payment Amount" value={formatCurrency(costSheet.down_payment_amount)} />
             <DetailRow label="Loan Amount" value={formatCurrency(costSheet.loan_amount)} />
             <DetailRow label="EMI Amount (Monthly)" value={formatCurrency(costSheet.emi_amount)} />
-            <DetailRow label="Insurance Amount" value={formatCurrency(costSheet.insurance_amount_monthly)} />
-            <DetailRow label="Registration Charges" value={formatCurrency(costSheet.registration_monthly)} />
+            <DetailRow label="Insurance Amount (Monthly)" value={formatCurrency(costSheet.insurance_amount_monthly)} />
+            <DetailRow label="Registration Charges (Monthly)" value={formatCurrency(costSheet.registration_monthly)} />
           </div>
           <Separator className="my-4" />
           <div className="flex justify-between items-center p-3 bg-primary/5 rounded-lg">
