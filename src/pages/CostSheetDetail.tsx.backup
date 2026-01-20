@@ -1,4 +1,3 @@
-// src/pages/CostSheetDetail.tsx
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -144,61 +143,58 @@ export default function CostSheetDetail() {
       return;
     }
 
-    // Send email notification for approval
-    if (status === 'APPROVED') {
+    // Send email notification for approval/rejection
+    if ((status === 'APPROVED' || status === 'REJECTED') && creator?.email) {
       try {
-        const { sendCostSheetApprovedEmail } = await import('../../services/email');
-        
-        // Determine approver role
-        const approverRole = isSuperAdmin ? 'SUPER_ADMIN' : 'ADMIN';
-        
-        const emailResult = await sendCostSheetApprovedEmail(id!, approverRole);
+        const emailModule = await import('@/services/emailService');
+        const sendEmail = status === 'APPROVED'
+          ? emailModule.sendCostSheetApprovalEmail
+          : emailModule.sendCostSheetRejectionEmail;
 
-        if (emailResult.success) {
-          toast({
-            title: 'Cost sheet approved successfully',
-            description: 'Email notification sent to creator'
-          });
-        } else {
-          toast({
-            title: 'Cost sheet approved successfully',
-            description: 'Note: Email notification failed to send',
-            variant: 'default'
-          });
-        }
+        await sendEmail({
+          costSheetId: id!,
+          companyName: costSheet.company_name,
+          creatorName: creator.full_name || 'Unknown',
+          creatorEmail: creator.email,
+          vehicleInfo: vehicle ? `${vehicle.brand_name} ${vehicle.model_name}` : 'N/A',
+          grandTotal: costSheet.grand_total,
+          status: status,
+          remarks: remarks || undefined,
+        });
+
+        toast({
+          title: `Cost sheet ${status.toLowerCase()} successfully`,
+          description: 'Email notification sent via Resend'
+        });
       } catch (emailError) {
         console.error('Failed to send email notification:', emailError);
         toast({
-          title: 'Cost sheet approved successfully',
+          title: `Cost sheet ${status.toLowerCase()} successfully`,
           description: 'Note: Email notification failed to send',
           variant: 'default'
         });
       }
-    } else if (status === 'REJECTED') {
-      toast({
-        title: 'Cost sheet rejected',
-        description: 'Creator has been notified'
-      });
     }
 
     // Send submission email if submitting for approval from detail page
-    if (status === 'PENDING_APPROVAL') {
+    if (status === 'PENDING_APPROVAL' && creator?.email) {
       try {
-        const { sendCostSheetSubmittedEmail } = await import('../../services/email');
+        const { sendCostSheetSubmissionEmail } = await import('@/services/emailService');
 
-        const emailResult = await sendCostSheetSubmittedEmail(id!);
+        await sendCostSheetSubmissionEmail({
+          costSheetId: id!,
+          companyName: costSheet.company_name,
+          creatorName: creator.full_name || 'Unknown',
+          creatorEmail: creator.email,
+          vehicleInfo: vehicle ? `${vehicle.brand_name} ${vehicle.model_name}` : 'N/A',
+          grandTotal: costSheet.grand_total,
+          status: status,
+        });
 
-        if (emailResult.success) {
-          toast({
-            title: 'Cost sheet submitted for approval',
-            description: 'Email notifications sent to admins'
-          });
-        } else {
-          toast({
-            title: 'Cost sheet submitted for approval',
-            description: 'Note: Email notification failed to send'
-          });
-        }
+        toast({
+          title: 'Cost sheet submitted for approval',
+          description: 'Email notification sent via Resend'
+        });
       } catch (emailError) {
         console.error('Failed to send email notification:', emailError);
         toast({

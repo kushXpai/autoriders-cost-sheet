@@ -662,21 +662,30 @@ export default function CostSheetForm() {
       // Send email notification only for regular users submitting for approval
       if (!isAdmin && finalStatus === 'PENDING_APPROVAL' && result.data) {
         try {
-          const { sendCostSheetSubmittedEmail } = await import('../../services/email');
+          const { sendCostSheetSubmissionEmail } = await import('@/services/emailService');
+          const vehicle = vehicles.find(v => v.id === formData.vehicle_id);
+          const vehicleInfo = vehicle ? `${vehicle.brand_name} ${vehicle.model_name}` : 'N/A';
 
-          const emailResult = await sendCostSheetSubmittedEmail(result.data.id);
+          const { data: userData } = await supabase
+            .from('users')
+            .select('full_name, email')
+            .eq('id', user.id)
+            .single();
 
-          if (emailResult.success) {
-            toast({
-              title: 'Cost sheet submitted for approval',
-              description: 'Email notifications sent to admins'
-            });
-          } else {
-            toast({
-              title: 'Cost sheet submitted for approval',
-              description: 'Note: Email notification failed to send'
-            });
-          }
+          await sendCostSheetSubmissionEmail({
+            costSheetId: result.data.id,
+            companyName: formData.company_name,
+            creatorName: userData?.full_name || user.email || 'Unknown',
+            creatorEmail: user.email || '',
+            vehicleInfo,
+            grandTotal: calculations.grand_total,
+            status: finalStatus,
+          });
+
+          toast({
+            title: 'Cost sheet submitted for approval',
+            description: 'Email notification sent via Resend'
+          });
         } catch (emailError) {
           console.error('Failed to send email notification:', emailError);
           toast({
