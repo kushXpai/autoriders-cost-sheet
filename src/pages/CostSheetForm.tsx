@@ -855,42 +855,6 @@ export default function CostSheetForm() {
           </CardContent>
         </Card>
 
-        {/* Registration Charges Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Additional Charges</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="registration">Registration Charges (₹) *</Label>
-              <Input
-                id="registration"
-                type="number"
-                min="0"
-                value={formData.registration_charges || ''}
-                onChange={(e) => updateField('registration_charges', parseFloat(e.target.value) || 0)}
-                placeholder="0"
-              />
-              <p className="text-xs text-muted-foreground">
-                Will be divided by 12 for monthly cost
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                On-Road Price (Reference)
-                <Lock className="w-3 h-3 text-muted-foreground" />
-              </Label>
-              <div className="p-3 bg-muted rounded-lg font-medium">
-                {formatCurrency(calculations.on_road_price)}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Ex-showroom + Insurance + Registration
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Financing Section */}
         <Card>
           <CardHeader>
@@ -937,6 +901,55 @@ export default function CostSheetForm() {
           </CardContent>
         </Card>
 
+        {/* Insurance, Registration & On-Road Price Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Insurance, Registration & On-Road Price</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                Annual Insurance
+                <Lock className="w-3 h-3 text-muted-foreground" />
+              </Label>
+              <div className="p-3 bg-muted rounded-lg font-medium">
+                {formatCurrency(calculations.insurance_amount_monthly * 12)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {insuranceRate}% of ex-showroom price
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="registration">Registration Charges (₹) *</Label>
+              <Input
+                id="registration"
+                type="number"
+                min="0"
+                value={formData.registration_charges || ''}
+                onChange={(e) => updateField('registration_charges', parseFloat(e.target.value) || 0)}
+                placeholder="0"
+              />
+              <p className="text-xs text-muted-foreground">
+                One-time registration fee
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                On-Road Price
+                <Lock className="w-3 h-3 text-muted-foreground" />
+              </Label>
+              <div className="p-3 bg-primary/10 rounded-lg font-medium text-primary">
+                {formatCurrency(calculations.on_road_price)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Ex-showroom + Insurance + Registration
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Section A - Vehicle Costs */}
         <Card>
           <CardHeader>
@@ -947,12 +960,14 @@ export default function CostSheetForm() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                Monthly EMI
-                <Lock className="w-3 h-3 text-muted-foreground" />
-              </Label>
-              <div className="p-3 bg-muted rounded-lg font-medium text-lg">
-                {formatCurrency(calculations.emi_amount)}
+              <div className="flex justify-between items-center">
+                <Label className="flex items-center gap-2">
+                  Monthly EMI
+                  <Lock className="w-3 h-3 text-muted-foreground" />
+                </Label>
+                <div className="text-lg font-medium">
+                  {formatCurrency(calculations.emi_amount)}
+                </div>
               </div>
               <p className="text-xs text-muted-foreground">
                 Interest Rate: {interestRate}% p.a. | Loan: {formatCurrency(calculations.loan_amount)} | Tenure: {calculations.tenure_months} months
