@@ -130,8 +130,9 @@ export async function calculateCostSheet(
   // Insurance calculated on ex-showroom price (annual, then converted to monthly for subtotal_a)
   const insurance_amount_annual =
     formData.ex_showroom_price * (insuranceRate / 100);
-  
-  const insurance_amount = insurance_amount_annual / 12; // Monthly insurance for subtotal_a
+
+  const insurance_amount_monthly = insurance_amount_annual / 12;
+  const registration_monthly = formData.registration_charges / 12;
 
   // On-road price = ex-showroom + annual insurance + registration
   const on_road_price =
@@ -143,9 +144,9 @@ export async function calculateCostSheet(
   // Financing (CHANGED - now based on on_road_price)
   // ----------------------
   const down_payment_amount =
-    on_road_price * (formData.down_payment_percent / 100);
+    formData.ex_showroom_price * (formData.down_payment_percent / 100);
 
-  const loan_amount = on_road_price - down_payment_amount;
+  const loan_amount = formData.ex_showroom_price - down_payment_amount;
 
   const emi_amount = calculateEMI(
     loan_amount,
@@ -156,7 +157,7 @@ export async function calculateCostSheet(
   // ----------------------
   // Subtotal A
   // ----------------------
-  const subtotal_a = emi_amount;
+  const subtotal_a = emi_amount + insurance_amount_monthly + registration_monthly;
 
   // ----------------------
   // Fuel
@@ -205,7 +206,8 @@ export async function calculateCostSheet(
   return {
     tenure_months,
 
-    insurance_amount,
+    insurance_amount_monthly,
+    registration_monthly,
     on_road_price,
 
     down_payment_amount,

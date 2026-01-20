@@ -141,7 +141,8 @@ export default function CostSheetForm() {
       // Validate calculations - replace NaN with 0
       const safeCalculations = {
         tenure_months: isNaN(calculations.tenure_months) ? 0 : calculations.tenure_months,
-        insurance_amount: isNaN(calculations.insurance_amount) ? 0 : calculations.insurance_amount,
+        insurance_amount_monthly: isNaN(calculations.insurance_amount_monthly) ? 0 : calculations.insurance_amount_monthly,
+        registration_monthly: isNaN(calculations.registration_monthly) ? 0 : calculations.registration_monthly,
         on_road_price: isNaN(calculations.on_road_price) ? 0 : calculations.on_road_price,
         down_payment_amount: isNaN(calculations.down_payment_amount) ? 0 : calculations.down_payment_amount,
         loan_amount: isNaN(calculations.loan_amount) ? 0 : calculations.loan_amount,
@@ -170,7 +171,8 @@ export default function CostSheetForm() {
         tenure_years: formDataRef.current.tenure_years,
         tenure_months: safeCalculations.tenure_months,
         ex_showroom_price: formDataRef.current.ex_showroom_price || 0,
-        insurance_amount: safeCalculations.insurance_amount,
+        insurance_amount_monthly: safeCalculations.insurance_amount_monthly,
+        registration_monthly: safeCalculations.registration_monthly,
         registration_charges: formDataRef.current.registration_charges || 0,
         on_road_price: safeCalculations.on_road_price,
         down_payment_percent: isNaN(formDataRef.current.down_payment_percent) ? 0 : formDataRef.current.down_payment_percent,
@@ -259,19 +261,20 @@ export default function CostSheetForm() {
     const tenure_months = formDataRef.current.tenure_years * 12;
     const ex_showroom = formDataRef.current.ex_showroom_price || 0;
     const insurance_amount_annual = ex_showroom * (insuranceRate / 100);
-    const insurance_amount = insurance_amount_annual / 12;
+    const insurance_amount_monthly = insurance_amount_annual / 12;
     const registration = formDataRef.current.registration_charges || 0;
+    const registration_monthly = registration / 12;
     const on_road_price = ex_showroom + insurance_amount_annual + registration;
 
     // Ensure down_payment_percent is a valid number
     const down_payment_percent = isNaN(formDataRef.current.down_payment_percent) ? 0 : formDataRef.current.down_payment_percent;
-    const down_payment_amount = on_road_price * (down_payment_percent / 100);
-    const loan_amount = on_road_price - down_payment_amount;
+    const down_payment_amount = ex_showroom * (down_payment_percent / 100);
+    const loan_amount = ex_showroom - down_payment_amount;
 
     const monthlyRate = interestRate / 100 / 12;
     const n = tenure_months;
     const emi_amount = loan_amount <= 0 ? 0 : (monthlyRate <= 0 ? loan_amount / tenure_months : (loan_amount * monthlyRate * Math.pow(1 + monthlyRate, n)) / (Math.pow(1 + monthlyRate, n) - 1));
-    const subtotal_a = emi_amount;
+    const subtotal_a = emi_amount + insurance_amount_monthly + registration_monthly;
 
     const selectedVehicle = vehicles.find(v => v.id === formDataRef.current.vehicle_id);
     const mileage = formDataRef.current.mileage_per_liter || selectedVehicle?.mileage_km_per_unit || 25;
@@ -286,7 +289,8 @@ export default function CostSheetForm() {
 
     return {
       tenure_months,
-      insurance_amount,
+      insurance_amount_monthly,
+      registration_monthly,
       on_road_price,
       down_payment_amount,
       loan_amount,
@@ -447,9 +451,9 @@ export default function CostSheetForm() {
       if (error) throw error;
 
       if (data) {
-        const onRoadPrice = data.on_road_price || 1; // Avoid division by zero
-        const downPaymentPercent = data.down_payment_amount && onRoadPrice > 0
-          ? (data.down_payment_amount / onRoadPrice) * 100
+        const exShowroomPrice = data.ex_showroom_price || 1;
+        const downPaymentPercent = data.down_payment_amount && exShowroomPrice > 0
+          ? (data.down_payment_amount / exShowroomPrice) * 100
           : 0;
 
         setFormData({
@@ -482,7 +486,7 @@ export default function CostSheetForm() {
   const calculations = useMemo(() => {
     if (!formData.vehicle_id) {
       return {
-        tenure_months: 0, insurance_amount: 0, on_road_price: 0, down_payment_amount: 0,
+        tenure_months: 0, insurance_amount_monthly: 0, registration_monthly: 0, on_road_price: 0, down_payment_amount: 0,
         loan_amount: 0, emi_amount: 0, subtotal_a: 0, fuel_cost: 0, total_driver_cost: 0,
         maintenance_cost: 0, subtotal_b: 0, admin_charge_percent: 0, admin_charge_amount: 0,
         grand_total: 0,
@@ -492,19 +496,20 @@ export default function CostSheetForm() {
     const tenure_months = formData.tenure_years * 12;
     const ex_showroom = formData.ex_showroom_price || 0;
     const insurance_amount_annual = ex_showroom * (insuranceRate / 100);
-    const insurance_amount = insurance_amount_annual / 12;
+    const insurance_amount_monthly = insurance_amount_annual / 12;
     const registration = formData.registration_charges || 0;
+    const registration_monthly = registration / 12;
     const on_road_price = ex_showroom + insurance_amount_annual + registration;
 
     // Ensure down_payment_percent is a valid number
     const down_payment_percent = isNaN(formData.down_payment_percent) ? 0 : formData.down_payment_percent;
-    const down_payment_amount = on_road_price * (down_payment_percent / 100);
-    const loan_amount = on_road_price - down_payment_amount;
+    const down_payment_amount = ex_showroom * (down_payment_percent / 100);
+    const loan_amount = ex_showroom - down_payment_amount;
 
     const monthlyRate = interestRate / 100 / 12;
     const n = tenure_months;
     const emi_amount = loan_amount <= 0 ? 0 : (monthlyRate <= 0 ? loan_amount / tenure_months : (loan_amount * monthlyRate * Math.pow(1 + monthlyRate, n)) / (Math.pow(1 + monthlyRate, n) - 1));
-    const subtotal_a = emi_amount;
+    const subtotal_a = emi_amount + insurance_amount_monthly + registration_monthly;
 
     const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id);
     const mileage = formData.mileage_per_liter || selectedVehicle?.mileage_km_per_unit || 25;
@@ -519,7 +524,8 @@ export default function CostSheetForm() {
 
     return {
       tenure_months,
-      insurance_amount,
+      insurance_amount_monthly,
+      registration_monthly,
       on_road_price,
       down_payment_amount,
       loan_amount,
@@ -534,7 +540,6 @@ export default function CostSheetForm() {
       grand_total,
     };
   }, [formData, vehicles, interestRate, adminChargePercent, insuranceRate, fuelRate]);
-
   const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id);
 
   const updateField = (field: keyof CostSheetFormData, value: string | number) => {
@@ -578,7 +583,8 @@ export default function CostSheetForm() {
         tenure_years: formData.tenure_years,
         tenure_months: calculations.tenure_months,
         ex_showroom_price: formData.ex_showroom_price,
-        insurance_amount: calculations.insurance_amount,
+        insurance_amount_monthly: calculations.insurance_amount_monthly,
+        registration_monthly: calculations.registration_monthly,
         registration_charges: formData.registration_charges,
         on_road_price: calculations.on_road_price,
         down_payment_percent: formData.down_payment_percent,
@@ -849,25 +855,12 @@ export default function CostSheetForm() {
           </CardContent>
         </Card>
 
-        {/* Insurance & On-Road Price Section */}
+        {/* Registration Charges Section */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Insurance & On-Road Price</CardTitle>
+            <CardTitle className="text-lg">Additional Charges</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                Annual Insurance
-                <Lock className="w-3 h-3 text-muted-foreground" />
-              </Label>
-              <div className="p-3 bg-muted rounded-lg font-medium">
-                {formatCurrency(calculations.insurance_amount * 12)}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {insuranceRate}% of ex-showroom price
-              </p>
-            </div>
-
+          <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="registration">Registration Charges (₹) *</Label>
               <Input
@@ -878,14 +871,17 @@ export default function CostSheetForm() {
                 onChange={(e) => updateField('registration_charges', parseFloat(e.target.value) || 0)}
                 placeholder="0"
               />
+              <p className="text-xs text-muted-foreground">
+                Will be divided by 12 for monthly cost
+              </p>
             </div>
 
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
-                On-Road Price
+                On-Road Price (Reference)
                 <Lock className="w-3 h-3 text-muted-foreground" />
               </Label>
-              <div className="p-3 bg-primary/10 rounded-lg font-medium text-primary">
+              <div className="p-3 bg-muted rounded-lg font-medium">
                 {formatCurrency(calculations.on_road_price)}
               </div>
               <p className="text-xs text-muted-foreground">
@@ -899,7 +895,7 @@ export default function CostSheetForm() {
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Financing Details</CardTitle>
-            <CardDescription>Based on on-road price</CardDescription>
+            <CardDescription>Based on ex-showroom price only</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             {isAdmin && (
@@ -917,7 +913,7 @@ export default function CostSheetForm() {
                 />
                 {errors.down_payment_percent && <p className="text-xs text-destructive">{errors.down_payment_percent}</p>}
                 <p className="text-xs text-muted-foreground">
-                  On {formatCurrency(calculations.on_road_price)}
+                  On ex-showroom price {formatCurrency(formData.ex_showroom_price)}
                 </p>
               </div>
             )}
@@ -934,6 +930,9 @@ export default function CostSheetForm() {
               <div className="p-3 bg-muted rounded-lg font-medium">
                 {formatCurrency(calculations.loan_amount)}
               </div>
+              <p className="text-xs text-muted-foreground">
+                Ex-showroom - Down payment
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -949,7 +948,7 @@ export default function CostSheetForm() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
-                EMI Amount
+                Monthly EMI
                 <Lock className="w-3 h-3 text-muted-foreground" />
               </Label>
               <div className="p-3 bg-muted rounded-lg font-medium text-lg">
@@ -959,18 +958,34 @@ export default function CostSheetForm() {
                 Interest Rate: {interestRate}% p.a. | Loan: {formatCurrency(calculations.loan_amount)} | Tenure: {calculations.tenure_months} months
               </p>
               <div className="text-xs text-muted-foreground mt-2 p-2 bg-muted/50 rounded">
-                <strong>Loan breakdown:</strong> On-road price {formatCurrency(calculations.on_road_price)}
-                (Ex-showroom {formatCurrency(formData.ex_showroom_price)} + Insurance {formatCurrency(calculations.insurance_amount * 12)} + Registration {formatCurrency(formData.registration_charges)})
+                <strong>Loan breakdown:</strong> Ex-showroom price {formatCurrency(formData.ex_showroom_price)}
                 {calculations.down_payment_amount > 0 && ` - Down payment ${formatCurrency(calculations.down_payment_amount)}`}
+                {' = Loan amount ' + formatCurrency(calculations.loan_amount)}
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Monthly Insurance ({insuranceRate}% of ex-showroom ÷ 12)</span>
+                <span className="font-medium">{formatCurrency(calculations.insurance_amount_monthly)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Monthly Registration (₹{formatCurrency(formData.registration_charges)} ÷ 12)</span>
+                <span className="font-medium">{formatCurrency(calculations.registration_monthly)}</span>
               </div>
             </div>
 
             <Separator />
 
             <div className="flex justify-between items-center p-3 bg-primary/5 rounded-lg">
-              <span className="font-medium">Subtotal A (Monthly EMI)</span>
+              <span className="font-medium">Subtotal A (EMI + Insurance + Registration)</span>
               <span className="text-xl font-bold text-primary">{formatCurrency(calculations.subtotal_a)}</span>
             </div>
+            <p className="text-xs text-muted-foreground text-center">
+              {formatCurrency(calculations.emi_amount)} + {formatCurrency(calculations.insurance_amount_monthly)} + {formatCurrency(calculations.registration_monthly)}
+            </p>
           </CardContent>
         </Card>
 

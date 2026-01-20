@@ -105,7 +105,8 @@ export interface CostSheet {
 
   // CHANGED: Added new fields for ex-showroom and on-road
   ex_showroom_price: number;
-  insurance_amount: number;
+  insurance_amount_monthly: number;
+  registration_monthly: number;
   registration_charges: number;
   on_road_price: number;
 
@@ -187,7 +188,8 @@ export interface CalculatedFields {
   tenure_months: number;
 
   // CHANGED: Added new calculated fields
-  insurance_amount: number;
+  insurance_amount_monthly: number;
+  registration_monthly: number;
   on_road_price: number;
 
   down_payment_amount: number;
