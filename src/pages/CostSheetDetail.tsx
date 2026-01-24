@@ -236,7 +236,7 @@ export default function CostSheetDetail() {
 
         <div className="flex gap-2 flex-wrap">
           {costSheet.status === 'APPROVED' && (
-            <Button variant="outline" onClick={() => generateCostSheetPDF(costSheet, vehicle)}>
+            <Button variant="outline" onClick={() => generateCostSheetPDF(costSheet, vehicle, creator?.full_name || 'Unknown')}>
               <Download className="w-4 h-4 mr-2" /> Download PDF
             </Button>
           )}
