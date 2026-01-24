@@ -148,10 +148,10 @@ export default function CostSheetDetail() {
     if (status === 'APPROVED') {
       try {
         const { sendCostSheetApprovedEmail } = await import('../../services/email');
-        
+
         // Determine approver role
         const approverRole = isSuperAdmin ? 'SUPER_ADMIN' : 'ADMIN';
-        
+
         const emailResult = await sendCostSheetApprovedEmail(id!, approverRole);
 
         if (emailResult.success) {
@@ -315,46 +315,61 @@ export default function CostSheetDetail() {
       </div>
 
 
-      {/* Section A - Vehicle Finance & Registration */}
+      {/* Section 1 - Vehicle Cost & Down Payment */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <span className="bg-primary text-primary-foreground px-2 py-0.5 rounded text-sm">A</span>
-            Vehicle Finance & Registration
-          </CardTitle>
+          <CardTitle className="text-lg">Vehicle Cost & Financing</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 md:grid-cols-1">
             <DetailRow label="Vehicle Cost" value={formatCurrency(costSheet.on_road_price)} />
-            <DetailRow label="Down Payment %" value={`${costSheet.down_payment_percent.toFixed(1)}%`} />
-            <DetailRow label="Down Payment Amount" value={formatCurrency(costSheet.down_payment_amount)} />
+            {isAdmin && (
+              <>
+                <DetailRow label="Down Payment %" value={`${costSheet.down_payment_percent.toFixed(1)}%`} />
+                <DetailRow label="Down Payment Amount" value={formatCurrency(costSheet.down_payment_amount)} />
+              </>
+            )}
             <DetailRow label="Loan Amount" value={formatCurrency(costSheet.loan_amount)} />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Section A - Vehicle Finance & Registration */}
+      <Card className="border-blue-200 bg-blue-50/30">
+        <CardHeader className="bg-blue-100/50">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <span className="bg-blue-600 text-white px-2 py-0.5 rounded text-sm font-semibold">A</span>
+            Vehicle Finance & Registration
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div className="grid gap-3 md:grid-cols-1">
             <DetailRow label="EMI Amount (Monthly)" value={formatCurrency(costSheet.emi_amount)} />
             <DetailRow label="Insurance Amount (Monthly)" value={formatCurrency(costSheet.insurance_amount_monthly)} />
             <DetailRow label="Registration Charges (Monthly)" value={formatCurrency(costSheet.registration_monthly)} />
           </div>
           <Separator className="my-4" />
-          <div className="flex justify-between items-center p-3 bg-primary/5 rounded-lg">
-            <span className="font-medium">Subtotal A</span>
-            <span className="text-xl font-bold text-primary">{formatCurrency(costSheet.subtotal_a)}</span>
+          <div className="flex justify-between items-center p-3 bg-blue-600/10 rounded-lg border border-blue-200">
+            <span className="font-medium text-blue-900">Subtotal A</span>
+            <span className="text-xl font-bold text-blue-700">{formatCurrency(costSheet.subtotal_a)}</span>
           </div>
         </CardContent>
       </Card>
 
 
       {/* Section B - Operational Costs */}
-      <Card>
-        <CardHeader>
+      <Card className="border-blue-200 bg-blue-50/30">
+        <CardHeader className="bg-blue-100/50">
           <CardTitle className="text-lg flex items-center gap-2">
-            <span className="bg-secondary text-secondary-foreground px-2 py-0.5 rounded text-sm">B</span>
+            <span className="bg-blue-600 text-white px-2 py-0.5 rounded text-sm font-semibold">B</span>
             Operational Costs
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           <div className="space-y-6">
             {/* Usage & Fuel */}
             <div>
-              <h4 className="font-medium mb-3 text-muted-foreground">Usage & Fuel</h4>
+              <h4 className="font-medium mb-3 text-blue-800">Usage & Fuel</h4>
               <div className="grid gap-3 md:grid-cols-1">
                 <DetailRow label="Monthly KM" value={`${costSheet.monthly_km} km`} />
                 <DetailRow label="Daily Hours" value={`${costSheet.daily_hours} hrs`} />
@@ -366,7 +381,7 @@ export default function CostSheetDetail() {
 
             {/* Driver Costs */}
             <div>
-              <h4 className="font-medium mb-3 text-muted-foreground">Driver Costs</h4>
+              <h4 className="font-medium mb-3 text-blue-800">Driver Costs</h4>
               <div className="grid gap-3 md:grid-cols-1">
                 <DetailRow label="Drivers Count" value={costSheet.drivers_count.toString()} />
                 <DetailRow label="Salary per Driver" value={formatCurrency(costSheet.driver_salary_per_driver)} />
@@ -378,7 +393,7 @@ export default function CostSheetDetail() {
 
             {/* Other Costs */}
             <div>
-              <h4 className="font-medium mb-3 text-muted-foreground">Other Monthly Costs</h4>
+              <h4 className="font-medium mb-3 text-blue-800">Other Monthly Costs</h4>
               <div className="grid gap-3 md:grid-cols-1">
                 <DetailRow label="Parking Charges" value={formatCurrency(costSheet.parking_charges)} />
                 <DetailRow label="Maintenance Cost" value={formatCurrency(costSheet.maintenance_cost)} />
@@ -390,9 +405,9 @@ export default function CostSheetDetail() {
           </div>
 
           <Separator className="my-4" />
-          <div className="flex justify-between items-center p-3 bg-secondary/20 rounded-lg">
-            <span className="font-medium">Subtotal B</span>
-            <span className="text-xl font-bold text-secondary-foreground">{formatCurrency(costSheet.subtotal_b)}</span>
+          <div className="flex justify-between items-center p-3 bg-blue-600/10 rounded-lg border border-blue-200">
+            <span className="font-medium text-blue-900">Subtotal B</span>
+            <span className="text-xl font-bold text-blue-700">{formatCurrency(costSheet.subtotal_b)}</span>
           </div>
         </CardContent>
       </Card>

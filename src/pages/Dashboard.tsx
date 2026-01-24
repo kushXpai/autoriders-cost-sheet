@@ -5,8 +5,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/calculations';
-import { 
-  FileText, Car, Clock, CheckCircle, XCircle, AlertCircle, Users, Shield, 
+import {
+  FileText, Car, Clock, CheckCircle, XCircle, AlertCircle, Users, Shield,
   Settings, TrendingUp, Fuel, BarChart3, Activity, DollarSign, Calendar,
   ArrowUpRight, ArrowDownRight, Sparkles, Plus, TrendingDown
 } from 'lucide-react';
@@ -31,6 +31,12 @@ export default function Dashboard() {
       setError(null);
 
       try {
+        let costSheetsQuery = supabase.from('cost_sheets').select('*');
+
+        if (!isAdmin) {
+          costSheetsQuery = costSheetsQuery.eq('created_by', user?.id);
+        }
+
         const [
           costSheetsRes,
           vehiclesRes,
@@ -40,7 +46,7 @@ export default function Dashboard() {
           insuranceRes,
           adminChargeRes,
         ] = await Promise.all([
-          supabase.from('cost_sheets').select('*'),
+          costSheetsQuery,
           supabase.from('vehicles').select('*'),
           supabase.from('users').select('*'),
           supabase.from('fuel_rates').select('*'),
@@ -91,7 +97,7 @@ export default function Dashboard() {
     }
 
     fetchData();
-  }, []);
+  }, [isAdmin, user?.id]);
 
   if (loading) {
     return (
@@ -185,7 +191,7 @@ export default function Dashboard() {
       <div className={`relative overflow-hidden rounded-xl bg-gradient-to-br ${getRoleColor()} p-6 text-white shadow-lg`}>
         <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full -mr-24 -mt-24 blur-3xl" />
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-white/10 rounded-full -ml-32 -mb-32 blur-3xl" />
-        
+
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-1">
             <Sparkles className="w-4 h-4" />
@@ -198,8 +204,8 @@ export default function Dashboard() {
             {isSuperAdmin
               ? 'Monitor system performance, manage rates, and oversee all operations'
               : isAdmin
-              ? 'Manage fleet operations, team members, and cost sheet approvals'
-              : 'Track your cost sheets and manage vehicle assignments'}
+                ? 'Manage fleet operations, team members, and cost sheet approvals'
+                : 'Track your cost sheets and manage vehicle assignments'}
           </p>
         </div>
       </div>
@@ -215,34 +221,34 @@ export default function Dashboard() {
               <h2 className="text-lg font-display font-bold">Overview</h2>
             </div>
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-              <CompactStatCard 
-                title="Total Sheets" 
-                value={stats.total} 
-                subtitle={`${stats.draft} drafts`} 
+              <CompactStatCard
+                title="Total Sheets"
+                value={stats.total}
+                subtitle={`${stats.draft} drafts`}
                 Icon={FileText}
                 onClick={() => navigate('/cost-sheets')}
               />
-              <CompactStatCard 
-                title="Pending" 
-                value={stats.pending} 
-                subtitle="Awaiting review" 
-                Icon={Clock} 
+              <CompactStatCard
+                title="Pending"
+                value={stats.pending}
+                subtitle="Awaiting review"
+                Icon={Clock}
                 trend={stats.pending > 0 ? 'up' : 'neutral'}
                 onClick={() => navigate('/cost-sheets?status=PENDING_APPROVAL')}
               />
-              <CompactStatCard 
-                title="Approved" 
-                value={stats.approved} 
-                subtitle={formatCurrency(stats.totalValue)} 
-                Icon={CheckCircle} 
+              <CompactStatCard
+                title="Approved"
+                value={stats.approved}
+                subtitle={formatCurrency(stats.totalValue)}
+                Icon={CheckCircle}
                 trend="up"
                 onClick={() => navigate('/cost-sheets?status=APPROVED')}
               />
-              <CompactStatCard 
-                title="Vehicles" 
-                value={stats.activeVehicles} 
-                subtitle={`${vehicles.length} total`} 
-                Icon={Car} 
+              <CompactStatCard
+                title="Vehicles"
+                value={stats.activeVehicles}
+                subtitle={`${vehicles.length} total`}
+                Icon={Car}
                 onClick={() => navigate('/vehicles')}
               />
             </div>
@@ -256,32 +262,32 @@ export default function Dashboard() {
                 <h2 className="text-lg font-display font-bold">Fleet & Team</h2>
               </div>
               <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-                <CompactStatCard 
-                  title="Fleet" 
-                  value={adminStats.totalVehicles} 
-                  subtitle={`${adminStats.inactiveVehicles} inactive`} 
-                  Icon={Car} 
+                <CompactStatCard
+                  title="Fleet"
+                  value={adminStats.totalVehicles}
+                  subtitle={`${adminStats.inactiveVehicles} inactive`}
+                  Icon={Car}
                   onClick={() => navigate('/vehicles')}
                 />
-                <CompactStatCard 
-                  title="Users" 
-                  value={adminStats.totalUsers} 
-                  subtitle={`${adminStats.activeUsers} active`} 
-                  Icon={Users} 
+                <CompactStatCard
+                  title="Users"
+                  value={adminStats.totalUsers}
+                  subtitle={`${adminStats.activeUsers} active`}
+                  Icon={Users}
                   onClick={() => navigate('/users')}
                 />
-                <CompactStatCard 
-                  title="Staff" 
-                  value={adminStats.staffCount} 
-                  subtitle={`${adminStats.adminCount} admins`} 
-                  Icon={Activity} 
+                <CompactStatCard
+                  title="Staff"
+                  value={adminStats.staffCount}
+                  subtitle={`${adminStats.adminCount} admins`}
+                  Icon={Activity}
                   onClick={() => navigate('/users')}
                 />
-                <CompactStatCard 
-                  title="Rejected" 
-                  value={stats.rejected} 
-                  subtitle="Need revision" 
-                  Icon={XCircle} 
+                <CompactStatCard
+                  title="Rejected"
+                  value={stats.rejected}
+                  subtitle="Need revision"
+                  Icon={XCircle}
                   trend={stats.rejected > 0 ? 'down' : 'neutral'}
                   onClick={() => navigate('/cost-sheets?status=REJECTED')}
                 />
@@ -297,32 +303,32 @@ export default function Dashboard() {
                 <h2 className="text-lg font-display font-bold">Financial Controls</h2>
               </div>
               <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-                <CompactStatCard 
-                  title="Interest" 
-                  value={`${superAdminStats.interestRate}%`} 
-                  subtitle="Lending rate" 
-                  Icon={TrendingUp} 
+                <CompactStatCard
+                  title="Interest"
+                  value={`${superAdminStats.interestRate}%`}
+                  subtitle="Lending rate"
+                  Icon={TrendingUp}
                   onClick={() => navigate('/interest-rate')}
                 />
-                <CompactStatCard 
-                  title="Insurance" 
-                  value={`${superAdminStats.insuranceRate}%`} 
-                  subtitle="Coverage rate" 
-                  Icon={Shield} 
+                <CompactStatCard
+                  title="Insurance"
+                  value={`${superAdminStats.insuranceRate}%`}
+                  subtitle="Coverage rate"
+                  Icon={Shield}
                   onClick={() => navigate('/insurance-rate')}
                 />
-                <CompactStatCard 
-                  title="Admin Fee" 
-                  value={`${superAdminStats.adminChargePercent}%`} 
-                  subtitle="Service charge" 
-                  Icon={DollarSign} 
+                <CompactStatCard
+                  title="Admin Fee"
+                  value={`${superAdminStats.adminChargePercent}%`}
+                  subtitle="Service charge"
+                  Icon={DollarSign}
                   onClick={() => navigate('/admin-charges')}
                 />
-                <CompactStatCard 
-                  title="Fuel Types" 
-                  value={superAdminStats.fuelTypes} 
-                  subtitle="Configurations" 
-                  Icon={Fuel} 
+                <CompactStatCard
+                  title="Fuel Types"
+                  value={superAdminStats.fuelTypes}
+                  subtitle="Configurations"
+                  Icon={Fuel}
                   onClick={() => navigate('/fuel-rates')}
                 />
               </div>
@@ -365,8 +371,8 @@ export default function Dashboard() {
               ) : (
                 <div className="space-y-2">
                   {recentSheets.map(sheet => (
-                    <div 
-                      key={sheet.id} 
+                    <div
+                      key={sheet.id}
                       className="group flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/60 cursor-pointer transition-all duration-200"
                       onClick={() => navigate(`/cost-sheets/${sheet.id}`)}
                     >
@@ -439,34 +445,34 @@ export default function Dashboard() {
               </div>
             </CardHeader>
             <CardContent className="pt-4 space-y-4">
-              <CompactStatusBar 
-                label="Draft" 
-                count={stats.draft} 
-                total={stats.total} 
+              <CompactStatusBar
+                label="Draft"
+                count={stats.draft}
+                total={stats.total}
                 color="bg-slate-500"
                 icon={FileText}
                 onClick={() => navigate('/cost-sheets?status=DRAFT')}
               />
-              <CompactStatusBar 
-                label="Pending" 
-                count={stats.pending} 
-                total={stats.total} 
+              <CompactStatusBar
+                label="Pending"
+                count={stats.pending}
+                total={stats.total}
                 color="bg-amber-500"
                 icon={Clock}
                 onClick={() => navigate('/cost-sheets?status=PENDING_APPROVAL')}
               />
-              <CompactStatusBar 
-                label="Approved" 
-                count={stats.approved} 
-                total={stats.total} 
+              <CompactStatusBar
+                label="Approved"
+                count={stats.approved}
+                total={stats.total}
                 color="bg-green-500"
                 icon={CheckCircle}
                 onClick={() => navigate('/cost-sheets?status=APPROVED')}
               />
-              <CompactStatusBar 
-                label="Rejected" 
-                count={stats.rejected} 
-                total={stats.total} 
+              <CompactStatusBar
+                label="Rejected"
+                count={stats.rejected}
+                total={stats.total}
                 color="bg-red-500"
                 icon={XCircle}
                 onClick={() => navigate('/cost-sheets?status=REJECTED')}
@@ -554,16 +560,16 @@ export default function Dashboard() {
 // --------------------------
 // Compact Components
 // --------------------------
-function CompactStatCard({ 
-  title, 
-  value, 
-  subtitle, 
-  Icon, 
+function CompactStatCard({
+  title,
+  value,
+  subtitle,
+  Icon,
   trend,
-  onClick 
+  onClick
 }: any) {
   return (
-    <Card 
+    <Card
       className="cursor-pointer group hover:shadow-lg transition-all duration-200 hover:scale-[1.02] border hover:border-primary/30"
       onClick={onClick}
     >
@@ -573,9 +579,8 @@ function CompactStatCard({
             <Icon className="w-4 h-4 text-foreground" />
           </div>
           {trend && (
-            <div className={`text-xs font-medium ${
-              trend === 'up' ? 'text-green-600' : trend === 'down' ? 'text-red-600' : 'text-muted-foreground'
-            }`}>
+            <div className={`text-xs font-medium ${trend === 'up' ? 'text-green-600' : trend === 'down' ? 'text-red-600' : 'text-muted-foreground'
+              }`}>
               {trend === 'up' ? <ArrowUpRight className="w-3 h-3" /> : trend === 'down' ? <ArrowDownRight className="w-3 h-3" /> : null}
             </div>
           )}
@@ -606,25 +611,25 @@ function CompactStatusBadge({ status }: { status: string }) {
   );
 }
 
-function CompactStatusBar({ 
-  label, 
-  count, 
-  total, 
-  color, 
+function CompactStatusBar({
+  label,
+  count,
+  total,
+  color,
   icon: Icon,
-  onClick 
-}: { 
-  label: string; 
-  count: number; 
-  total: number; 
-  color: string; 
+  onClick
+}: {
+  label: string;
+  count: number;
+  total: number;
+  color: string;
   icon: any;
-  onClick?: () => void 
+  onClick?: () => void
 }) {
   const percentage = total > 0 ? (count / total) * 100 : 0;
 
   return (
-    <div 
+    <div
       className="space-y-2 cursor-pointer group"
       onClick={onClick}
     >

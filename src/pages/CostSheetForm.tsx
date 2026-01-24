@@ -85,6 +85,7 @@ export default function CostSheetForm() {
   const [adminChargePercent, setAdminChargePercent] = useState(0);
   const [insuranceRate, setInsuranceRate] = useState(3.5);
   const [fuelRate, setFuelRate] = useState(0);
+  const [originalCreatedBy, setOriginalCreatedBy] = useState<string | null>(null);
 
   // Auto-save state
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -203,7 +204,7 @@ export default function CostSheetForm() {
         approved_at: isAdmin ? now : null,
         approved_by: isAdmin ? user.id : null,
         pdf_url: null,
-        created_by: user.id,
+        created_by: (isEditing && originalCreatedBy) ? originalCreatedBy : user.id,
       };
 
       let result;
@@ -215,7 +216,6 @@ export default function CostSheetForm() {
           .from('cost_sheets')
           .update({ ...costSheetData, updated_at: now })
           .eq('id', id)
-          .eq('created_by', user.id)
           .select()
           .single();
       } else if (currentDraftId) {
@@ -224,7 +224,6 @@ export default function CostSheetForm() {
           .from('cost_sheets')
           .update({ ...costSheetData, updated_at: now })
           .eq('id', currentDraftId)
-          .eq('created_by', user.id)
           .select()
           .single();
       } else {
@@ -451,6 +450,8 @@ export default function CostSheetForm() {
       if (error) throw error;
 
       if (data) {
+        setOriginalCreatedBy(data.created_by);
+
         const exShowroomPrice = data.ex_showroom_price || 1;
         const downPaymentPercent = data.down_payment_amount && exShowroomPrice > 0
           ? (data.down_payment_amount / exShowroomPrice) * 100
@@ -615,7 +616,7 @@ export default function CostSheetForm() {
         approved_at: finalStatus === 'APPROVED' ? now : null,
         approved_by: finalStatus === 'APPROVED' ? user.id : null,
         pdf_url: null,
-        created_by: user.id,
+        created_by: (isEditing && originalCreatedBy) ? originalCreatedBy : user.id,
       };
 
       let result;
@@ -630,7 +631,7 @@ export default function CostSheetForm() {
           .select()
           .single();
       } else if (currentDraftId) {
-        // If we have an auto-saved draft, update it
+        // If we have an auto-saved draft ID, update that draft
         result = await supabase
           .from('cost_sheets')
           .update({ ...costSheetData, updated_at: now })
@@ -638,7 +639,6 @@ export default function CostSheetForm() {
           .select()
           .single();
 
-        // Clear the draft ID
         setAutoSavedDraftId(null);
         autoSavedDraftIdRef.current = null;
       } else {

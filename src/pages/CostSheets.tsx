@@ -49,9 +49,15 @@ export default function CostSheets() {
     const fetchData = async () => {
       setLoading(true);
 
-      const { data: sheetsData, error: sheetsError } = await supabase
+      let query = supabase
         .from('cost_sheets')
-        .select('*')
+        .select('*');
+
+      if (!isAdmin) {
+        query = query.eq('created_by', user?.id);
+      }
+
+      const { data: sheetsData, error: sheetsError } = await query
         .order('created_at', { ascending: false });
 
       if (sheetsError) console.error('Error fetching cost sheets:', sheetsError.message);
@@ -68,7 +74,7 @@ export default function CostSheets() {
     };
 
     fetchData();
-  }, []);
+  }, [isAdmin, user?.id]);
 
   const getVehicleName = (vehicleId: string) => {
     const vehicle = vehicles.find(v => v.id === vehicleId);
