@@ -1,6 +1,7 @@
 // supabase/functions/send-email/index.ts
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -17,7 +18,7 @@ interface EmailRequest {
 const SMTP_CONFIG = {
   host: 'smtp.gmail.com',
   port: 587,
-  secure: false, // true for 465, false for other ports
+  secure: false,
   auth: {
     user: Deno.env.get('EMAIL_USER') || 'app.autoriders@gmail.com',
     pass: Deno.env.get('EMAIL_PASSWORD'),
@@ -37,7 +38,6 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     
-    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2')
     const supabase = createClient(supabaseUrl, supabaseKey)
 
     // Fetch email settings
@@ -110,7 +110,7 @@ serve(async (req) => {
 
       emailData = {
         from: `AutoRiders <${SMTP_CONFIG.auth.user}>`,
-        to: uniqueRecipients.join(', '),
+        to: uniqueRecipients,
         subject: `🚗 New Cost Sheet Submitted - ${costSheet.company_name}`,
         html,
       }
@@ -154,8 +154,8 @@ serve(async (req) => {
 
       emailData = {
         from: `AutoRiders <${SMTP_CONFIG.auth.user}>`,
-        to: costSheet.created_by_user.email,
-        cc: ccEmails.length > 0 ? ccEmails.join(', ') : undefined,
+        to: [costSheet.created_by_user.email],
+        cc: ccEmails.length > 0 ? ccEmails : undefined,
         subject: `✅ Cost Sheet Approved - ${costSheet.company_name}`,
         html,
       }
@@ -163,8 +163,7 @@ serve(async (req) => {
       throw new Error('Invalid email type')
     }
 
-    // Send email using native fetch to a Nodemailer service
-    // Since Deno doesn't support Nodemailer directly, we'll use SMTP directly
+    // Send email using SMTP
     const messageId = await sendEmailViaSMTP(emailData)
 
     return new Response(
@@ -201,17 +200,30 @@ async function sendEmailViaSMTP(emailData: any): Promise<string> {
   })
 
   try {
+    // Handle both single string and array for 'to' field
+    const toRecipients = Array.isArray(emailData.to) 
+      ? emailData.to.join(', ') 
+      : emailData.to
+
+    // Handle CC field
+    const ccRecipients = emailData.cc && Array.isArray(emailData.cc)
+      ? emailData.cc.join(', ')
+      : emailData.cc
+
     await client.send({
       from: emailData.from,
-      to: emailData.to,
-      cc: emailData.cc,
+      to: toRecipients,
+      cc: ccRecipients,
       subject: emailData.subject,
       content: 'auto',
       html: emailData.html,
     })
 
-    const messageId = `${Date.now()}@autoriders.com`
+    const messageId = `${Date.now()}-${Math.random().toString(36).substring(7)}@autoriders.com`
     return messageId
+  } catch (error) {
+    console.error('SMTP send error:', error)
+    throw error
   } finally {
     await client.close()
   }
