@@ -187,14 +187,18 @@ serve(async (req) => {
 // SMTP email sender
 async function sendEmailViaSMTP(emailData: any): Promise<string> {
   const client = new SmtpClient({
-    hostname: SMTP_CONFIG.host,
-    port: SMTP_CONFIG.port,
+    hostname: 'smtp.gmail.com',
+    port: 587,       // for STARTTLS
     tls: { starttls: true },
-    username: SMTP_CONFIG.auth.user,
-    password: SMTP_CONFIG.auth.pass,
+    username: Deno.env.get('EMAIL_USER')!,
+    password: Deno.env.get('EMAIL_PASSWORD')!,
   });
 
   try {
+    console.log("Connecting to Gmail SMTP...");
+    await client.connect();
+    console.log("Connected ✅");
+
     await client.send({
       from: emailData.from,
       to: Array.isArray(emailData.to) ? emailData.to : [emailData.to],
