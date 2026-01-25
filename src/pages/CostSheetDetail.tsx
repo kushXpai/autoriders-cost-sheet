@@ -21,7 +21,7 @@ import { formatCurrency } from '@/lib/calculations';
 import { generateCostSheetPDF } from '@/services/pdfGenerator';
 import {
   ArrowLeft, Pencil, CheckCircle, XCircle, Clock, FileText,
-  Car, Calendar, Building, User, Download, Send
+  Car, Calendar, Building, User, Download, Send, Home
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -275,6 +275,17 @@ export default function CostSheetDetail() {
               <div>
                 <p className="text-xs text-muted-foreground">Company</p>
                 <p className="font-medium">{costSheet.company_name}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-3">
+              <Home className="w-5 h-5 text-muted-foreground" />
+              <div>
+                <p className="text-xs text-muted-foreground">City</p>
+                <p className="font-medium">{costSheet.city}</p>
               </div>
             </div>
           </CardContent>

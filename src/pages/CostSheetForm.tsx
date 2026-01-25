@@ -35,6 +35,7 @@ import { z } from 'zod';
 const formSchema = z.object({
   company_name: z.string().min(1, 'Company name is required').max(200),
   vehicle_id: z.string().min(1, 'Please select a vehicle'),
+  city: z.string().min(1, 'Please select a city'),
   tenure_years: z.number().min(1, 'Minimum 1 year').max(10, 'Maximum 10 years'),
   ex_showroom_price: z.number().min(1, 'Ex-showroom price is required'),
   down_payment_percent: z.number().min(0, 'Minimum 0%').max(100, 'Maximum 100%'),
@@ -59,6 +60,7 @@ export default function CostSheetForm() {
   const [formData, setFormData] = useState<CostSheetFormData>({
     company_name: '',
     vehicle_id: '',
+    city: '',
     tenure_years: 3,
     ex_showroom_price: 0,
     down_payment_percent: 0,
@@ -169,6 +171,7 @@ export default function CostSheetForm() {
       const costSheetData: Omit<CostSheet, 'id' | 'created_at' | 'updated_at'> = {
         company_name: formDataRef.current.company_name.trim(),
         vehicle_id: formDataRef.current.vehicle_id,
+        city: formDataRef.current.city,
         tenure_years: formDataRef.current.tenure_years,
         tenure_months: safeCalculations.tenure_months,
         ex_showroom_price: formDataRef.current.ex_showroom_price || 0,
@@ -343,6 +346,12 @@ export default function CostSheetForm() {
   }, [formData.vehicle_id, selectedCity, vehicles]);
 
   useEffect(() => {
+    if (selectedCity && formData.city !== selectedCity) {
+      setFormData(prev => ({ ...prev, city: selectedCity }));
+    }
+  }, [selectedCity]);
+
+  useEffect(() => {
     if (id && user) {
       fetchCostSheet(id);
     } else {
@@ -460,6 +469,7 @@ export default function CostSheetForm() {
         setFormData({
           company_name: data.company_name || '',
           vehicle_id: data.vehicle_id || '',
+          city: data.city || '',
           tenure_years: data.tenure_years || 3,
           ex_showroom_price: data.ex_showroom_price || 0,
           down_payment_percent: isNaN(downPaymentPercent) ? 0 : downPaymentPercent,
@@ -581,6 +591,7 @@ export default function CostSheetForm() {
       const costSheetData: Omit<CostSheet, 'id' | 'created_at' | 'updated_at'> = {
         company_name: formData.company_name.trim(),
         vehicle_id: formData.vehicle_id,
+        city: formData.city,
         tenure_years: formData.tenure_years,
         tenure_months: calculations.tenure_months,
         ex_showroom_price: formData.ex_showroom_price,
@@ -684,8 +695,34 @@ export default function CostSheetForm() {
             description: 'Note: Email notification failed to send'
           });
         }
+      }
+      // Send email when superadmin edits (auto-approves)
+      else if (isAdmin && isEditing && finalStatus === 'APPROVED' && result.data) {
+        try {
+          const { sendCostSheetApprovedEmail } = await import('../services/email');
+
+          const emailResult = await sendCostSheetApprovedEmail(result.data.id, 'SUPER_ADMIN');
+
+          if (emailResult.success) {
+            toast({
+              title: 'Cost sheet updated and approved',
+              description: 'Email notification sent to creator'
+            });
+          } else {
+            toast({
+              title: 'Cost sheet updated and approved',
+              description: 'Note: Email notification failed to send'
+            });
+          }
+        } catch (emailError) {
+          console.error('Failed to send email notification:', emailError);
+          toast({
+            title: 'Cost sheet updated and approved',
+            description: 'Note: Email notification failed to send'
+          });
+        }
       } else {
-        // Toast for superadmin or drafts
+        // Toast for superadmin create or drafts
         const getMessage = () => {
           if (isAdmin) {
             return isEditing
@@ -780,14 +817,13 @@ export default function CostSheetForm() {
                 value={formData.company_name}
                 onChange={(e) => updateField('company_name', e.target.value)}
                 placeholder="Enter company name"
-                maxLength={200}
               />
               {errors.company_name && <p className="text-xs text-destructive">{errors.company_name}</p>}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="city">City *</Label>
-              <Select value={selectedCity} onValueChange={setSelectedCity}>
+              <Select value={formData.city} onValueChange={(v) => updateField('city', v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select city" />
                 </SelectTrigger>
@@ -799,6 +835,7 @@ export default function CostSheetForm() {
                   ))}
                 </SelectContent>
               </Select>
+              {errors.city && <p className="text-xs text-destructive">{errors.city}</p>}
             </div>
 
             <div className="space-y-2">

@@ -99,6 +99,7 @@ export interface CostSheet {
 
   company_name: string;
   vehicle_id: string;
+  city: string;
 
   tenure_years: number;
   tenure_months: number;
@@ -159,6 +160,7 @@ export interface CostSheet {
 export interface CostSheetFormData {
   company_name: string;
   vehicle_id: string;
+  city: string;
 
   tenure_years: number;
 
