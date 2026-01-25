@@ -101,7 +101,16 @@ export default function UserManagement() {
 
     try {
       if (editingUser) {
-        // Update metadata only (full_name, role)
+        // Update password if provided
+        if (formData.password.trim()) {
+          const { error: passwordError } = await supabase.auth.admin.updateUserById(
+            editingUser.id,
+            { password: formData.password }
+          );
+          if (passwordError) throw passwordError;
+        }
+
+        // Update metadata (full_name, role)
         const { data, error } = await supabase
           .from('users')
           .update({
