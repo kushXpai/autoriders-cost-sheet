@@ -2,6 +2,7 @@
 export {
   sendCostSheetSubmittedEmail,
   sendCostSheetApprovedEmail,
+  sendCostSheetRejectedEmail,
 } from './service';
 
 export type { EmailResponse } from './types';

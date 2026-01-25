@@ -11,7 +11,7 @@ const corsHeaders = {
 };
 
 interface EmailRequest {
-  type: 'submission' | 'approval';
+  type: 'submission' | 'approval' | 'rejection';
   costSheetId: string;
   approverRole?: 'ADMIN' | 'SUPER_ADMIN';
 }
@@ -180,12 +180,7 @@ function generateSubmissionEmail(data: any) {
   </style>
 </head>
 <body>
-  <div class="email-container">
-    <div class="header">
-      <div class="icon">🚗</div>
-      <h1>AutoRiders Cost Sheet System</h1>
-    </div>
-    
+  <div class="email-container">    
     <div class="body">
       <div class="alert-box">
         <strong>⚠️ Action Required</strong>
@@ -441,11 +436,6 @@ function generateApprovalEmail(data: any) {
 </head>
 <body>
   <div class="email-container">
-    <div class="header">
-      <div class="icon">✅</div>
-      <h1>Cost Sheet Approved</h1>
-    </div>
-    
     <div class="body">
       <div class="success-box">
         <strong>🎉 Congratulations!</strong>
@@ -505,6 +495,232 @@ function generateApprovalEmail(data: any) {
       <p style="font-size: 13px; color: #94a3b8; text-align: center; margin-top: 20px;">
         If the button doesn't work, copy and paste this link:<br>
         <a href="${data.viewUrl}" style="color: #10b981; word-break: break-all;">${data.viewUrl}</a>
+      </p>
+    </div>
+
+    <div class="footer">
+      <p class="company">© ${new Date().getFullYear()} AutoRiders Fleet Management</p>
+      <p>This is an automated notification from AutoRiders Cost Sheet Management System.</p>
+      <p>Please do not reply to this email. For support, contact your system administrator.</p>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+}
+
+// Email template for rejection
+function generateRejectionEmail(data: any) {
+  const roleDisplay = data.approverRole === 'SUPER_ADMIN' ? 'Super Admin' : 'Admin';
+
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cost Sheet Rejected</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background-color: #f5f7fa;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    .email-container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      padding: 40px 30px;
+      text-align: center;
+    }
+    .header h1 {
+      color: #ffffff;
+      font-size: 28px;
+      font-weight: 700;
+      margin: 0;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .header .icon {
+      font-size: 48px;
+      margin-bottom: 10px;
+    }
+    .body {
+      padding: 40px 30px;
+    }
+    .alert-box {
+      background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+      border-left: 4px solid #dc2626;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 30px;
+    }
+    .alert-box strong {
+      color: #7f1d1d;
+      font-size: 16px;
+      display: block;
+      margin-bottom: 8px;
+    }
+    .alert-box p {
+      color: #991b1b;
+      margin: 0;
+      font-size: 14px;
+    }
+    .info-card {
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 25px;
+      margin: 25px 0;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .info-row:last-child {
+      border-bottom: none;
+    }
+    .label {
+      font-weight: 600;
+      color: #64748b;
+      font-size: 14px;
+    }
+    .value {
+      color: #1e293b;
+      font-weight: 500;
+      font-size: 14px;
+      text-align: right;
+    }
+    .remarks-box {
+      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      border-left: 4px solid #f59e0b;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 25px 0;
+    }
+    .remarks-box strong {
+      color: #92400e;
+      font-size: 14px;
+      display: block;
+      margin-bottom: 10px;
+    }
+    .remarks-box p {
+      color: #78350f;
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .button {
+      display: inline-block;
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      color: #ffffff !important;
+      padding: 16px 40px;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 16px;
+      margin: 25px 0;
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+    }
+    .footer {
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      padding: 30px;
+      text-align: center;
+      border-top: 1px solid #e2e8f0;
+    }
+    .footer p {
+      color: #64748b;
+      font-size: 13px;
+      margin: 8px 0;
+    }
+    .footer .company {
+      font-weight: 600;
+      color: #ef4444;
+      font-size: 14px;
+    }
+    h2 {
+      color: #1e293b;
+      font-size: 24px;
+      margin-bottom: 15px;
+      font-weight: 600;
+    }
+    p {
+      color: #475569;
+      font-size: 15px;
+      margin: 12px 0;
+    }
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, #e2e8f0, transparent);
+      margin: 25px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <div class="body">
+      <div class="alert-box">
+        <strong>⚠️ Action Required</strong>
+        <p>Your cost sheet has been rejected. Please review the feedback and resubmit.</p>
+      </div>
+
+      <h2>Hello ${data.creatorName},</h2>
+      <p>Unfortunately, your cost sheet submission has been <strong style="color: #dc2626;">REJECTED</strong>.</p>
+
+      <div class="info-card">
+        <div class="info-row">
+          <span class="label">Company Name</span>
+          <span class="value">${data.companyName}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Vehicle</span>
+          <span class="value">${data.vehicleInfo}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Rejected By</span>
+          <span class="value">${data.approverName} (${roleDisplay})</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Rejected On</span>
+          <span class="value">${data.rejectedAt}</span>
+        </div>
+      </div>
+
+      ${
+        data.remarks
+          ? `
+      <div class="remarks-box">
+        <strong>💬 Rejection Reason:</strong>
+        <p>${data.remarks}</p>
+      </div>
+      `
+          : ''
+      }
+
+      <div class="divider"></div>
+
+      <p style="text-align: center; font-weight: 500;">
+        Please review the rejection reason and make necessary changes before resubmitting.
+      </p>
+
+      <center>
+        <a href="${data.viewUrl}" class="button">
+          📋 View & Edit Cost Sheet
+        </a>
+      </center>
+
+      <p style="font-size: 13px; color: #94a3b8; text-align: center; margin-top: 20px;">
+        If the button doesn't work, copy and paste this link:<br>
+        <a href="${data.viewUrl}" style="color: #ef4444; word-break: break-all;">${data.viewUrl}</a>
       </p>
     </div>
 
@@ -682,6 +898,57 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         to: costSheet.created_by_user.email,
         cc: ccEmails.length > 0 ? ccEmails.join(', ') : undefined,
         subject: `✅ Cost Sheet Approved - ${costSheet.company_name}`,
+        html,
+      };
+    } else if (type === 'rejection') {
+      // Rejection email - TO: Creator, CC: Other Admins
+      if (
+        !costSheet.created_by_user.email ||
+        !costSheet.created_by_user.email.includes('@')
+      ) {
+        throw new Error('Creator email is invalid or missing');
+      }
+
+      let ccEmails: string[] = [];
+      if (approverRole === 'ADMIN') ccEmails = [settings.super_admin_email];
+      else if (approverRole === 'SUPER_ADMIN') ccEmails = settings.admin_emails || [];
+
+      ccEmails = [...new Set(ccEmails)].filter(
+        (email) =>
+          email &&
+          typeof email === 'string' &&
+          email.includes('@') &&
+          email !== costSheet.created_by_user.email
+      );
+
+      const formattedDate = new Date(
+        costSheet.approved_at || new Date()
+      ).toLocaleString('en-IN', {
+        dateStyle: 'long',
+        timeStyle: 'short',
+        timeZone: 'Asia/Kolkata',
+      });
+
+      const vehicleInfo = costSheet.vehicle
+        ? `${costSheet.vehicle.brand_name} ${costSheet.vehicle.model_name} - ${costSheet.vehicle.variant_name}`
+        : 'N/A';
+
+      const html = generateRejectionEmail({
+        companyName: costSheet.company_name,
+        approverName: costSheet.approved_by_user.full_name,
+        approverRole: costSheet.approved_by_user.role,
+        rejectedAt: formattedDate,
+        remarks: costSheet.approval_remarks,
+        viewUrl,
+        creatorName: costSheet.created_by_user.full_name,
+        vehicleInfo,
+      });
+
+      emailOptions = {
+        from: `AutoRiders <${process.env.EMAIL_USER}>`,
+        to: costSheet.created_by_user.email,
+        cc: ccEmails.length > 0 ? ccEmails.join(', ') : undefined,
+        subject: `❌ Cost Sheet Rejected - ${costSheet.company_name}`,
         html,
       };
     } else {

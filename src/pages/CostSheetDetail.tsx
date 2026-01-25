@@ -144,7 +144,6 @@ export default function CostSheetDetail() {
       return;
     }
 
-    // Send email notification for approval
     if (status === 'APPROVED') {
       try {
         const { sendCostSheetApprovedEmail } = await import('../services/email');
@@ -175,10 +174,34 @@ export default function CostSheetDetail() {
         });
       }
     } else if (status === 'REJECTED') {
-      toast({
-        title: 'Cost sheet rejected',
-        description: 'Creator has been notified'
-      });
+      try {
+        const { sendCostSheetRejectedEmail } = await import('../services/email');
+
+        // Determine approver role
+        const approverRole = isSuperAdmin ? 'SUPER_ADMIN' : 'ADMIN';
+
+        const emailResult = await sendCostSheetRejectedEmail(id!, approverRole);
+
+        if (emailResult.success) {
+          toast({
+            title: 'Cost sheet rejected',
+            description: 'Email notification sent to creator'
+          });
+        } else {
+          toast({
+            title: 'Cost sheet rejected',
+            description: 'Note: Email notification failed to send',
+            variant: 'default'
+          });
+        }
+      } catch (emailError) {
+        console.error('Failed to send email notification:', emailError);
+        toast({
+          title: 'Cost sheet rejected',
+          description: 'Note: Email notification failed to send',
+          variant: 'default'
+        });
+      }
     }
 
     // Send submission email if submitting for approval from detail page

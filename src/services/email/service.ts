@@ -76,3 +76,33 @@ export async function sendCostSheetApprovedEmail(
     };
   }
 }
+
+export async function sendCostSheetRejectedEmail(
+  costSheetId: string,
+  approverRole: 'ADMIN' | 'SUPER_ADMIN'
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const response = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        type: 'rejection',
+        costSheetId,
+        approverRole,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to send rejection email');
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error sending rejection email:', error);
+    return { success: false, error: error.message };
+  }
+}
