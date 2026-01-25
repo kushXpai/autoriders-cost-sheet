@@ -1,13 +1,15 @@
 // supabase/functions/send-email/index.ts
 
+import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
 import { SmtpClient } from "https://deno.land/x/deno_esmtp/smtp.ts";
-import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.36.0?target=deno";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Max-Age': '86400',
+  // 'Access-Control-Allow-Credentials': 'true', // uncomment if needed
 };
 
 interface EmailRequest {
@@ -30,7 +32,10 @@ const SMTP_CONFIG = {
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders,
+    });
   }
 
   try {
@@ -38,10 +43,9 @@ serve(async (req) => {
 
     console.log('Processing email request:', { type, costSheetId, approverRole });
 
-    // Get Supabase client
+    // Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Fetch email settings
@@ -51,21 +55,14 @@ serve(async (req) => {
       .single();
 
     if (settingsError || !settings) {
-      console.error('Email settings error:', settingsError);
       throw new Error('Email settings not found');
     }
-
-    console.log('Email settings loaded:', {
-      superAdmin: settings.super_admin_email,
-      adminCount: settings.admin_emails?.length || 0,
-      enabled: settings.notifications_enabled,
-    });
 
     if (!settings.notifications_enabled) {
       console.log('Notifications are disabled');
       return new Response(
-        JSON.stringify({ success: true, message: 'Notifications disabled' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: 'Notifications are disabled' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -82,15 +79,8 @@ serve(async (req) => {
       .single();
 
     if (costSheetError || !costSheet) {
-      console.error('Cost sheet error:', costSheetError);
       throw new Error('Cost sheet not found');
     }
-
-    console.log('Cost sheet loaded:', {
-      id: costSheet.id,
-      company: costSheet.company_name,
-      creator: costSheet.created_by_user.email,
-    });
 
     const appUrl = Deno.env.get('APP_URL') || 'http://localhost:5173';
     const viewUrl = `${appUrl}/cost-sheets/${costSheetId}`;
@@ -106,20 +96,14 @@ serve(async (req) => {
 
       const uniqueRecipients = [...new Set(recipients)];
 
-      console.log('Submission recipients:', uniqueRecipients);
-
       if (uniqueRecipients.length === 0) {
         throw new Error('No valid admin emails configured');
       }
 
       const formattedDate = new Date(costSheet.submitted_at || costSheet.created_at)
-        .toLocaleString('en-IN', {
-          dateStyle: 'long',
-          timeStyle: 'short',
-          timeZone: 'Asia/Kolkata',
-        });
+        .toLocaleString('en-IN', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Asia/Kolkata' });
 
-      const vehicleInfo = costSheet.vehicle 
+      const vehicleInfo = costSheet.vehicle
         ? `${costSheet.vehicle.brand_name} ${costSheet.vehicle.model_name} - ${costSheet.vehicle.variant_name}`
         : 'N/A';
 
@@ -141,37 +125,22 @@ serve(async (req) => {
       };
     } else if (type === 'approval') {
       // Approval email - TO: Creator, CC: Other Admins
-      
       if (!costSheet.created_by_user.email || !costSheet.created_by_user.email.includes('@')) {
         throw new Error('Creator email is invalid or missing');
       }
 
       let ccEmails: string[] = [];
+      if (approverRole === 'ADMIN') ccEmails = [settings.super_admin_email];
+      else if (approverRole === 'SUPER_ADMIN') ccEmails = settings.admin_emails || [];
 
-      if (approverRole === 'ADMIN') {
-        ccEmails = [settings.super_admin_email];
-      } else if (approverRole === 'SUPER_ADMIN') {
-        ccEmails = settings.admin_emails || [];
-      }
-
-      // Filter and validate CC emails
       ccEmails = [...new Set(ccEmails)].filter(
-        (email) => email && 
-                   typeof email === 'string' && 
-                   email.includes('@') && 
-                   email !== costSheet.created_by_user.email
+        email => email && typeof email === 'string' && email.includes('@') && email !== costSheet.created_by_user.email
       );
 
-      console.log('Approval email - TO:', costSheet.created_by_user.email, 'CC:', ccEmails);
-
       const formattedDate = new Date(costSheet.approved_at || new Date())
-        .toLocaleString('en-IN', {
-          dateStyle: 'long',
-          timeStyle: 'short',
-          timeZone: 'Asia/Kolkata',
-        });
+        .toLocaleString('en-IN', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Asia/Kolkata' });
 
-      const vehicleInfo = costSheet.vehicle 
+      const vehicleInfo = costSheet.vehicle
         ? `${costSheet.vehicle.brand_name} ${costSheet.vehicle.model_name} - ${costSheet.vehicle.variant_name}`
         : 'N/A';
 
@@ -198,36 +167,29 @@ serve(async (req) => {
       throw new Error('Invalid email type');
     }
 
-    // Send email using SMTP
-    console.log('Sending email via SMTP...');
+    // Send email
     const messageId = await sendEmailViaSMTP(emailData);
-    console.log('Email sent successfully:', messageId);
 
-    return new Response(
-      JSON.stringify({ success: true, messageId }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return new Response(JSON.stringify({ success: true, messageId }), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Email send error:', error);
-    return new Response(
-      JSON.stringify({ success: false, error: error.message }),
-      { 
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    );
+    return new Response(JSON.stringify({ success: false, error: error.message }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 });
 
-// SMTP email sender using Gmail (UPDATED to use deno_esmtp)
+// SMTP email sender
 async function sendEmailViaSMTP(emailData: any): Promise<string> {
   const client = new SmtpClient({
     hostname: SMTP_CONFIG.host,
     port: SMTP_CONFIG.port,
-    tls: {
-      starttls: true,
-    },
+    tls: { starttls: true },
     username: SMTP_CONFIG.auth.user,
     password: SMTP_CONFIG.auth.pass,
   });
@@ -240,22 +202,17 @@ async function sendEmailViaSMTP(emailData: any): Promise<string> {
       subject: emailData.subject,
       html: emailData.html,
     });
-
     await client.close();
     return `${Date.now()}@autoriders.com`;
-  } catch (err) {
+  } catch (err: any) {
     try { await client.close(); } catch {}
     throw new Error(`Failed to send email: ${err.message}`);
   }
 }
 
-// Format currency helper
+// Format currency
 function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    maximumFractionDigits: 0,
-  }).format(amount)
+  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
 }
 
 // Email templates
