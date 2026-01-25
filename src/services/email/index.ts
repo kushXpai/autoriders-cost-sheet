@@ -1,4 +1,4 @@
-// services/email/index.ts
+// src/services/email/index.ts
 
 export {
   sendCostSheetSubmittedEmail,

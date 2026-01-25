@@ -147,7 +147,7 @@ export default function CostSheetDetail() {
     // Send email notification for approval
     if (status === 'APPROVED') {
       try {
-        const { sendCostSheetApprovedEmail } = await import('../../services/email');
+        const { sendCostSheetApprovedEmail } = await import('../services/email');
 
         // Determine approver role
         const approverRole = isSuperAdmin ? 'SUPER_ADMIN' : 'ADMIN';
@@ -184,7 +184,7 @@ export default function CostSheetDetail() {
     // Send submission email if submitting for approval from detail page
     if (status === 'PENDING_APPROVAL') {
       try {
-        const { sendCostSheetSubmittedEmail } = await import('../../services/email');
+        const { sendCostSheetSubmittedEmail } = await import('../services/email');
 
         const emailResult = await sendCostSheetSubmittedEmail(id!);
 

@@ -662,7 +662,7 @@ export default function CostSheetForm() {
       // Send email notification only for regular users submitting for approval
       if (!isAdmin && finalStatus === 'PENDING_APPROVAL' && result.data) {
         try {
-          const { sendCostSheetSubmittedEmail } = await import('../../services/email');
+          const { sendCostSheetSubmittedEmail } = await import('../services/email');
 
           const emailResult = await sendCostSheetSubmittedEmail(result.data.id);
 

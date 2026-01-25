@@ -1,4 +1,5 @@
-// services/email/types.ts
+// src/services/email/types.ts
+
 export interface EmailRecipient {
   email: string;
   name?: string;
@@ -11,6 +12,8 @@ export interface CostSheetSubmittedEmailData {
   submitterEmail: string;
   submittedAt: string;
   viewUrl: string;
+  vehicleInfo: string;
+  grandTotal: number;
 }
 
 export interface CostSheetApprovedEmailData {
@@ -22,6 +25,8 @@ export interface CostSheetApprovedEmailData {
   remarks?: string;
   viewUrl: string;
   creatorName: string;
+  vehicleInfo: string;
+  grandTotal: number;
 }
 
 export interface EmailResponse {

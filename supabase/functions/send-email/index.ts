@@ -1,9 +1,6 @@
 // supabase/functions/send-email/index.ts
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { Resend } from 'npm:resend@2.0.0'
-
-const resend = new Resend(Deno.env.get('RESEND_API_KEY'))
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,6 +11,17 @@ interface EmailRequest {
   type: 'submission' | 'approval'
   costSheetId: string
   approverRole?: 'ADMIN' | 'SUPER_ADMIN'
+}
+
+// Gmail SMTP configuration
+const SMTP_CONFIG = {
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false, // true for 465, false for other ports
+  auth: {
+    user: Deno.env.get('EMAIL_USER') || 'app.autoriders@gmail.com',
+    pass: Deno.env.get('EMAIL_PASSWORD'),
+  },
 }
 
 serve(async (req) => {
@@ -55,7 +63,8 @@ serve(async (req) => {
       .select(`
         *,
         created_by_user:users!cost_sheets_created_by_fkey(id, full_name, email),
-        approved_by_user:users!cost_sheets_approved_by_fkey(id, full_name, email, role)
+        approved_by_user:users!cost_sheets_approved_by_fkey(id, full_name, email, role),
+        vehicle:vehicles(brand_name, model_name, variant_name)
       `)
       .eq('id', costSheetId)
       .single()
@@ -66,6 +75,8 @@ serve(async (req) => {
 
     const appUrl = Deno.env.get('APP_URL') || 'http://localhost:5173'
     const viewUrl = `${appUrl}/cost-sheets/${costSheetId}`
+
+    let emailData: any
 
     if (type === 'submission') {
       // Submission email
@@ -83,27 +94,26 @@ serve(async (req) => {
           timeZone: 'Asia/Kolkata',
         })
 
+      const vehicleInfo = costSheet.vehicle 
+        ? `${costSheet.vehicle.brand_name} ${costSheet.vehicle.model_name} - ${costSheet.vehicle.variant_name}`
+        : 'N/A'
+
       const html = generateSubmissionEmail({
         companyName: costSheet.company_name,
         submitterName: costSheet.created_by_user.full_name,
         submittedAt: formattedDate,
         costSheetId,
         viewUrl,
+        vehicleInfo,
+        grandTotal: costSheet.grand_total,
       })
 
-      const { data, error } = await resend.emails.send({
-        from: Deno.env.get('EMAIL_FROM') || 'onboarding@resend.dev',
-        to: uniqueRecipients,
-        subject: `New Cost Sheet Submitted - ${costSheet.company_name}`,
+      emailData = {
+        from: `AutoRiders <${SMTP_CONFIG.auth.user}>`,
+        to: uniqueRecipients.join(', '),
+        subject: `🚗 New Cost Sheet Submitted - ${costSheet.company_name}`,
         html,
-      })
-
-      if (error) throw error
-
-      return new Response(
-        JSON.stringify({ success: true, messageId: data?.id }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      }
 
     } else if (type === 'approval') {
       // Approval email
@@ -126,6 +136,10 @@ serve(async (req) => {
           timeZone: 'Asia/Kolkata',
         })
 
+      const vehicleInfo = costSheet.vehicle 
+        ? `${costSheet.vehicle.brand_name} ${costSheet.vehicle.model_name} - ${costSheet.vehicle.variant_name}`
+        : 'N/A'
+
       const html = generateApprovalEmail({
         companyName: costSheet.company_name,
         approverName: costSheet.approved_by_user.full_name,
@@ -134,30 +148,29 @@ serve(async (req) => {
         remarks: costSheet.approval_remarks,
         viewUrl,
         creatorName: costSheet.created_by_user.full_name,
+        vehicleInfo,
+        grandTotal: costSheet.grand_total,
       })
 
-      const emailPayload: any = {
-        from: Deno.env.get('EMAIL_FROM') || 'onboarding@resend.dev',
+      emailData = {
+        from: `AutoRiders <${SMTP_CONFIG.auth.user}>`,
         to: costSheet.created_by_user.email,
-        subject: `Cost Sheet Approved - ${costSheet.company_name}`,
+        cc: ccEmails.length > 0 ? ccEmails.join(', ') : undefined,
+        subject: `✅ Cost Sheet Approved - ${costSheet.company_name}`,
         html,
       }
-
-      if (ccEmails.length > 0) {
-        emailPayload.cc = ccEmails
-      }
-
-      const { data, error } = await resend.emails.send(emailPayload)
-
-      if (error) throw error
-
-      return new Response(
-        JSON.stringify({ success: true, messageId: data?.id }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+    } else {
+      throw new Error('Invalid email type')
     }
 
-    throw new Error('Invalid email type')
+    // Send email using native fetch to a Nodemailer service
+    // Since Deno doesn't support Nodemailer directly, we'll use SMTP directly
+    const messageId = await sendEmailViaSMTP(emailData)
+
+    return new Response(
+      JSON.stringify({ success: true, messageId }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
 
   } catch (error) {
     console.error('Email send error:', error)
@@ -171,48 +184,274 @@ serve(async (req) => {
   }
 })
 
+// SMTP email sender using Gmail
+async function sendEmailViaSMTP(emailData: any): Promise<string> {
+  const { SMTPClient } = await import('https://deno.land/x/denomailer@1.6.0/mod.ts')
+
+  const client = new SMTPClient({
+    connection: {
+      hostname: SMTP_CONFIG.host,
+      port: SMTP_CONFIG.port,
+      tls: true,
+      auth: {
+        username: SMTP_CONFIG.auth.user,
+        password: SMTP_CONFIG.auth.pass,
+      },
+    },
+  })
+
+  try {
+    await client.send({
+      from: emailData.from,
+      to: emailData.to,
+      cc: emailData.cc,
+      subject: emailData.subject,
+      content: 'auto',
+      html: emailData.html,
+    })
+
+    const messageId = `${Date.now()}@autoriders.com`
+    return messageId
+  } finally {
+    await client.close()
+  }
+}
+
+// Format currency helper
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
+
 // Email templates
 function generateSubmissionEmail(data: any) {
   return `
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New Cost Sheet Submitted</title>
   <style>
-    body { margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5; }
-    .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
-    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px 20px; text-align: center; }
-    .header h1 { margin: 0; color: #ffffff; font-size: 24px; }
-    .body { padding: 40px 30px; }
-    .info-box { background-color: #f8f9fa; border-left: 4px solid #667eea; padding: 15px; margin: 20px 0; }
-    .button { display: inline-block; padding: 12px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff !important; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 20px 0; }
-    .footer { background-color: #f8f9fa; padding: 20px 30px; text-align: center; font-size: 12px; color: #6c757d; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background-color: #f5f7fa;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    .email-container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 40px 30px;
+      text-align: center;
+    }
+    .header h1 {
+      color: #ffffff;
+      font-size: 28px;
+      font-weight: 700;
+      margin: 0;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .header .icon {
+      font-size: 48px;
+      margin-bottom: 10px;
+    }
+    .body {
+      padding: 40px 30px;
+    }
+    .alert-box {
+      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      border-left: 4px solid #f59e0b;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 30px;
+    }
+    .alert-box strong {
+      color: #92400e;
+      font-size: 16px;
+      display: block;
+      margin-bottom: 8px;
+    }
+    .alert-box p {
+      color: #78350f;
+      margin: 0;
+      font-size: 14px;
+    }
+    .info-card {
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 25px;
+      margin: 25px 0;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .info-row:last-child {
+      border-bottom: none;
+    }
+    .label {
+      font-weight: 600;
+      color: #64748b;
+      font-size: 14px;
+    }
+    .value {
+      color: #1e293b;
+      font-weight: 500;
+      font-size: 14px;
+      text-align: right;
+    }
+    .total-box {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 25px;
+      border-radius: 10px;
+      text-align: center;
+      margin: 25px 0;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+    .total-box .label {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.9);
+      margin-bottom: 8px;
+    }
+    .total-box .amount {
+      font-size: 32px;
+      font-weight: 700;
+      color: white;
+    }
+    .button {
+      display: inline-block;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #ffffff !important;
+      padding: 16px 40px;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 16px;
+      margin: 25px 0;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      transition: transform 0.2s;
+    }
+    .button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+    }
+    .footer {
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      padding: 30px;
+      text-align: center;
+      border-top: 1px solid #e2e8f0;
+    }
+    .footer p {
+      color: #64748b;
+      font-size: 13px;
+      margin: 8px 0;
+    }
+    .footer .company {
+      font-weight: 600;
+      color: #667eea;
+      font-size: 14px;
+    }
+    h2 {
+      color: #1e293b;
+      font-size: 24px;
+      margin-bottom: 15px;
+      font-weight: 600;
+    }
+    p {
+      color: #475569;
+      font-size: 15px;
+      margin: 12px 0;
+    }
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, #e2e8f0, transparent);
+      margin: 25px 0;
+    }
   </style>
 </head>
 <body>
-  <div class="container">
+  <div class="email-container">
     <div class="header">
-      <h1>🚗 AutoRiders Cost Sheet System</h1>
+      <div class="icon">🚗</div>
+      <h1>AutoRiders Cost Sheet System</h1>
     </div>
+    
     <div class="body">
-      <h2>New Cost Sheet Awaiting Approval</h2>
-      <p>Hello,</p>
-      <p>A new cost sheet has been submitted and is awaiting your approval.</p>
-      <div class="info-box">
-        <p style="margin: 8px 0;"><strong>Company:</strong> ${data.companyName}</p>
-        <p style="margin: 8px 0;"><strong>Submitted By:</strong> ${data.submitterName}</p>
-        <p style="margin: 8px 0;"><strong>Submitted On:</strong> ${data.submittedAt}</p>
-        <p style="margin: 8px 0;"><strong>Cost Sheet ID:</strong> ${data.costSheetId.slice(0, 8)}...</p>
+      <div class="alert-box">
+        <strong>⚠️ Action Required</strong>
+        <p>A new cost sheet has been submitted and requires your immediate attention for approval.</p>
       </div>
-      <p>Please review and approve or provide feedback on this submission.</p>
+
+      <h2>📋 New Submission Details</h2>
+      <p>Hello Admin,</p>
+      <p>A cost sheet has been submitted and is awaiting your review and approval.</p>
+
+      <div class="info-card">
+        <div class="info-row">
+          <span class="label">Cost Sheet ID</span>
+          <span class="value">#${data.costSheetId.substring(0, 8).toUpperCase()}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Company Name</span>
+          <span class="value">${data.companyName}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Vehicle</span>
+          <span class="value">${data.vehicleInfo}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Submitted By</span>
+          <span class="value">${data.submitterName}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Submitted On</span>
+          <span class="value">${data.submittedAt}</span>
+        </div>
+      </div>
+
+      <div class="total-box">
+        <div class="label">Monthly Total Amount</div>
+        <div class="amount">${formatCurrency(data.grandTotal)}</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <p style="text-align: center; font-weight: 500;">
+        Please review the cost sheet details and take appropriate action.
+      </p>
+
       <center>
-        <a href="${data.viewUrl}" class="button">Review Cost Sheet</a>
+        <a href="${data.viewUrl}" class="button">
+          📊 Review Cost Sheet
+        </a>
       </center>
+
+      <p style="font-size: 13px; color: #94a3b8; text-align: center; margin-top: 20px;">
+        If the button doesn't work, copy and paste this link:<br>
+        <a href="${data.viewUrl}" style="color: #667eea; word-break: break-all;">${data.viewUrl}</a>
+      </p>
     </div>
+
     <div class="footer">
+      <p class="company">© ${new Date().getFullYear()} AutoRiders Fleet Management</p>
       <p>This is an automated notification from AutoRiders Cost Sheet Management System.</p>
-      <p>© ${new Date().getFullYear()} AutoRiders. All rights reserved.</p>
+      <p>Please do not reply to this email. For support, contact your system administrator.</p>
     </div>
   </div>
 </body>
@@ -225,44 +464,260 @@ function generateApprovalEmail(data: any) {
   
   return `
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cost Sheet Approved</title>
   <style>
-    body { margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5; }
-    .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
-    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px 20px; text-align: center; }
-    .header h1 { margin: 0; color: #ffffff; font-size: 24px; }
-    .body { padding: 40px 30px; }
-    .info-box { background-color: #f8f9fa; border-left: 4px solid #667eea; padding: 15px; margin: 20px 0; }
-    .button { display: inline-block; padding: 12px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff !important; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 20px 0; }
-    .footer { background-color: #f8f9fa; padding: 20px 30px; text-align: center; font-size: 12px; color: #6c757d; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background-color: #f5f7fa;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    .email-container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      padding: 40px 30px;
+      text-align: center;
+    }
+    .header h1 {
+      color: #ffffff;
+      font-size: 28px;
+      font-weight: 700;
+      margin: 0;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .header .icon {
+      font-size: 48px;
+      margin-bottom: 10px;
+    }
+    .body {
+      padding: 40px 30px;
+    }
+    .success-box {
+      background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+      border-left: 4px solid #10b981;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 30px;
+    }
+    .success-box strong {
+      color: #065f46;
+      font-size: 16px;
+      display: block;
+      margin-bottom: 8px;
+    }
+    .success-box p {
+      color: #047857;
+      margin: 0;
+      font-size: 14px;
+    }
+    .success-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      padding: 8px 20px;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 14px;
+      margin: 15px 0;
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+    }
+    .info-card {
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 25px;
+      margin: 25px 0;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .info-row:last-child {
+      border-bottom: none;
+    }
+    .label {
+      font-weight: 600;
+      color: #64748b;
+      font-size: 14px;
+    }
+    .value {
+      color: #1e293b;
+      font-weight: 500;
+      font-size: 14px;
+      text-align: right;
+    }
+    .total-box {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      padding: 25px;
+      border-radius: 10px;
+      text-align: center;
+      margin: 25px 0;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+    .total-box .label {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.9);
+      margin-bottom: 8px;
+    }
+    .total-box .amount {
+      font-size: 32px;
+      font-weight: 700;
+      color: white;
+    }
+    .remarks-box {
+      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      border-left: 4px solid #f59e0b;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 25px 0;
+    }
+    .remarks-box strong {
+      color: #92400e;
+      font-size: 15px;
+      display: block;
+      margin-bottom: 10px;
+    }
+    .remarks-box p {
+      color: #78350f;
+      margin: 0;
+      font-size: 14px;
+      font-style: italic;
+    }
+    .button {
+      display: inline-block;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: #ffffff !important;
+      padding: 16px 40px;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 16px;
+      margin: 25px 0;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+      transition: transform 0.2s;
+    }
+    .button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(16, 185, 129, 0.5);
+    }
+    .footer {
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      padding: 30px;
+      text-align: center;
+      border-top: 1px solid #e2e8f0;
+    }
+    .footer p {
+      color: #64748b;
+      font-size: 13px;
+      margin: 8px 0;
+    }
+    .footer .company {
+      font-weight: 600;
+      color: #10b981;
+      font-size: 14px;
+    }
+    h2 {
+      color: #1e293b;
+      font-size: 24px;
+      margin-bottom: 15px;
+      font-weight: 600;
+    }
+    p {
+      color: #475569;
+      font-size: 15px;
+      margin: 12px 0;
+    }
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, #e2e8f0, transparent);
+      margin: 25px 0;
+    }
   </style>
 </head>
 <body>
-  <div class="container">
+  <div class="email-container">
     <div class="header">
-      <h1>🚗 AutoRiders Cost Sheet System</h1>
+      <div class="icon">✅</div>
+      <h1>Cost Sheet Approved</h1>
     </div>
+    
     <div class="body">
-      <h2>✅ Cost Sheet Approved</h2>
-      <p>Hello ${data.creatorName},</p>
-      <p>Great news! Your cost sheet has been approved.</p>
-      <div class="info-box">
-        <p style="margin: 8px 0;"><strong>Company:</strong> ${data.companyName}</p>
-        <p style="margin: 8px 0;"><strong>Approved By:</strong> ${data.approverName} (${roleDisplay})</p>
-        <p style="margin: 8px 0;"><strong>Approved On:</strong> ${data.approvedAt}</p>
-        ${data.remarks ? `<p style="margin: 8px 0;"><strong>Remarks:</strong> ${data.remarks}</p>` : ''}
+      <div class="success-box">
+        <strong>🎉 Congratulations!</strong>
+        <p>Your cost sheet has been successfully reviewed and approved.</p>
       </div>
-      <p>You can now view the approved cost sheet and download the PDF if needed.</p>
+
+      <h2>Hello ${data.creatorName},</h2>
+      <p>Great news! Your cost sheet submission has been <span class="success-badge">APPROVED</span></p>
+
+      <div class="info-card">
+        <div class="info-row">
+          <span class="label">Company Name</span>
+          <span class="value">${data.companyName}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Vehicle</span>
+          <span class="value">${data.vehicleInfo}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Approved By</span>
+          <span class="value">${data.approverName} (${roleDisplay})</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Approved On</span>
+          <span class="value">${data.approvedAt}</span>
+        </div>
+      </div>
+
+      <div class="total-box">
+        <div class="label">Approved Monthly Amount</div>
+        <div class="amount">${formatCurrency(data.grandTotal)}</div>
+      </div>
+
+      ${data.remarks ? `
+        <div class="remarks-box">
+          <strong>💬 Approver's Remarks:</strong>
+          <p>${data.remarks}</p>
+        </div>
+      ` : ''}
+
+      <div class="divider"></div>
+
+      <p style="text-align: center; font-weight: 500;">
+        You can now view the approved cost sheet and download the PDF document.
+      </p>
+
       <center>
-        <a href="${data.viewUrl}" class="button">View Approved Cost Sheet</a>
+        <a href="${data.viewUrl}" class="button">
+          📄 View Approved Cost Sheet
+        </a>
       </center>
+
+      <p style="font-size: 13px; color: #94a3b8; text-align: center; margin-top: 20px;">
+        If the button doesn't work, copy and paste this link:<br>
+        <a href="${data.viewUrl}" style="color: #10b981; word-break: break-all;">${data.viewUrl}</a>
+      </p>
     </div>
+
     <div class="footer">
+      <p class="company">© ${new Date().getFullYear()} AutoRiders Fleet Management</p>
       <p>This is an automated notification from AutoRiders Cost Sheet Management System.</p>
-      <p>© ${new Date().getFullYear()} AutoRiders. All rights reserved.</p>
+      <p>Please do not reply to this email. For support, contact your system administrator.</p>
     </div>
   </div>
 </body>
