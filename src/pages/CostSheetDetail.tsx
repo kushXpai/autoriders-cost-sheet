@@ -277,10 +277,17 @@ export default function CostSheetDetail() {
           )}
           {canApprove && (
             <>
-              <Button variant="outline" onClick={() => setRejectionDialogOpen(true)}>
+              <Button
+                variant="destructive"
+                onClick={() => setRejectionDialogOpen(true)}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
                 <XCircle className="w-4 h-4 mr-2" /> Reject
               </Button>
-              <Button onClick={() => setApprovalDialogOpen(true)}>
+              <Button
+                onClick={() => setApprovalDialogOpen(true)}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
                 <CheckCircle className="w-4 h-4 mr-2" /> Approve
               </Button>
             </>
