@@ -1,17 +1,19 @@
 // supabase/functions/send-email/index.ts
 
-import { SMTPClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts"
-import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { SmtpClient } from "https://deno.land/x/deno_esmtp@smtp.ts";
+import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+  'Access-Control-Max-Age': '86400',
+};
 
 interface EmailRequest {
-  type: 'submission' | 'approval'
-  costSheetId: string
-  approverRole?: 'ADMIN' | 'SUPER_ADMIN'
+  type: 'submission' | 'approval';
+  costSheetId: string;
+  approverRole?: 'ADMIN' | 'SUPER_ADMIN';
 }
 
 // Gmail SMTP configuration
@@ -21,50 +23,50 @@ const SMTP_CONFIG = {
   secure: false,
   auth: {
     user: Deno.env.get('EMAIL_USER')!,
-    pass: Deno.env.get('EMAIL_PASSWORD'),
+    pass: Deno.env.get('EMAIL_PASSWORD')!,
   },
-}
+};
 
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const { type, costSheetId, approverRole } = await req.json() as EmailRequest
+    const { type, costSheetId, approverRole } = await req.json() as EmailRequest;
 
-    console.log('Processing email request:', { type, costSheetId, approverRole })
+    console.log('Processing email request:', { type, costSheetId, approverRole });
 
     // Get Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     
-    const supabase = createClient(supabaseUrl, supabaseKey)
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Fetch email settings
     const { data: settings, error: settingsError } = await supabase
       .from('email_settings')
       .select('*')
-      .single()
+      .single();
 
     if (settingsError || !settings) {
-      console.error('Email settings error:', settingsError)
-      throw new Error('Email settings not found')
+      console.error('Email settings error:', settingsError);
+      throw new Error('Email settings not found');
     }
 
     console.log('Email settings loaded:', {
       superAdmin: settings.super_admin_email,
       adminCount: settings.admin_emails?.length || 0,
       enabled: settings.notifications_enabled,
-    })
+    });
 
     if (!settings.notifications_enabled) {
-      console.log('Notifications are disabled')
+      console.log('Notifications are disabled');
       return new Response(
         JSON.stringify({ success: true, message: 'Notifications disabled' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      );
     }
 
     // Fetch cost sheet with relations
@@ -77,37 +79,37 @@ serve(async (req) => {
         vehicle:vehicles(brand_name, model_name, variant_name)
       `)
       .eq('id', costSheetId)
-      .single()
+      .single();
 
     if (costSheetError || !costSheet) {
-      console.error('Cost sheet error:', costSheetError)
-      throw new Error('Cost sheet not found')
+      console.error('Cost sheet error:', costSheetError);
+      throw new Error('Cost sheet not found');
     }
 
     console.log('Cost sheet loaded:', {
       id: costSheet.id,
       company: costSheet.company_name,
       creator: costSheet.created_by_user.email,
-    })
+    });
 
-    const appUrl = Deno.env.get('APP_URL') || 'http://localhost:5173'
-    const viewUrl = `${appUrl}/cost-sheets/${costSheetId}`
+    const appUrl = Deno.env.get('APP_URL') || 'http://localhost:5173';
+    const viewUrl = `${appUrl}/cost-sheets/${costSheetId}`;
 
-    let emailData: any
+    let emailData: any;
 
     if (type === 'submission') {
       // Submission email - TO: Admins
       const recipients = [
         settings.super_admin_email,
         ...(settings.admin_emails || []),
-      ].filter(email => email && typeof email === 'string' && email.includes('@'))
+      ].filter(email => email && typeof email === 'string' && email.includes('@'));
 
-      const uniqueRecipients = [...new Set(recipients)]
+      const uniqueRecipients = [...new Set(recipients)];
 
-      console.log('Submission recipients:', uniqueRecipients)
+      console.log('Submission recipients:', uniqueRecipients);
 
       if (uniqueRecipients.length === 0) {
-        throw new Error('No valid admin emails configured')
+        throw new Error('No valid admin emails configured');
       }
 
       const formattedDate = new Date(costSheet.submitted_at || costSheet.created_at)
@@ -115,11 +117,11 @@ serve(async (req) => {
           dateStyle: 'long',
           timeStyle: 'short',
           timeZone: 'Asia/Kolkata',
-        })
+        });
 
       const vehicleInfo = costSheet.vehicle 
         ? `${costSheet.vehicle.brand_name} ${costSheet.vehicle.model_name} - ${costSheet.vehicle.variant_name}`
-        : 'N/A'
+        : 'N/A';
 
       const html = generateSubmissionEmail({
         companyName: costSheet.company_name,
@@ -129,28 +131,27 @@ serve(async (req) => {
         viewUrl,
         vehicleInfo,
         grandTotal: costSheet.grand_total,
-      })
+      });
 
       emailData = {
         from: `AutoRiders <${SMTP_CONFIG.auth.user}>`,
         to: uniqueRecipients,
         subject: `🚗 New Cost Sheet Submitted - ${costSheet.company_name}`,
         html,
-      }
-
+      };
     } else if (type === 'approval') {
       // Approval email - TO: Creator, CC: Other Admins
       
       if (!costSheet.created_by_user.email || !costSheet.created_by_user.email.includes('@')) {
-        throw new Error('Creator email is invalid or missing')
+        throw new Error('Creator email is invalid or missing');
       }
 
-      let ccEmails: string[] = []
+      let ccEmails: string[] = [];
 
       if (approverRole === 'ADMIN') {
-        ccEmails = [settings.super_admin_email]
+        ccEmails = [settings.super_admin_email];
       } else if (approverRole === 'SUPER_ADMIN') {
-        ccEmails = settings.admin_emails || []
+        ccEmails = settings.admin_emails || [];
       }
 
       // Filter and validate CC emails
@@ -159,20 +160,20 @@ serve(async (req) => {
                    typeof email === 'string' && 
                    email.includes('@') && 
                    email !== costSheet.created_by_user.email
-      )
+      );
 
-      console.log('Approval email - TO:', costSheet.created_by_user.email, 'CC:', ccEmails)
+      console.log('Approval email - TO:', costSheet.created_by_user.email, 'CC:', ccEmails);
 
       const formattedDate = new Date(costSheet.approved_at || new Date())
         .toLocaleString('en-IN', {
           dateStyle: 'long',
           timeStyle: 'short',
           timeZone: 'Asia/Kolkata',
-        })
+        });
 
       const vehicleInfo = costSheet.vehicle 
         ? `${costSheet.vehicle.brand_name} ${costSheet.vehicle.model_name} - ${costSheet.vehicle.variant_name}`
-        : 'N/A'
+        : 'N/A';
 
       const html = generateApprovalEmail({
         companyName: costSheet.company_name,
@@ -184,7 +185,7 @@ serve(async (req) => {
         creatorName: costSheet.created_by_user.full_name,
         vehicleInfo,
         grandTotal: costSheet.grand_total,
-      })
+      });
 
       emailData = {
         from: `AutoRiders <${SMTP_CONFIG.auth.user}>`,
@@ -192,44 +193,44 @@ serve(async (req) => {
         cc: ccEmails.length > 0 ? ccEmails : undefined,
         subject: `✅ Cost Sheet Approved - ${costSheet.company_name}`,
         html,
-      }
+      };
     } else {
-      throw new Error('Invalid email type')
+      throw new Error('Invalid email type');
     }
 
     // Send email using SMTP
-    console.log('Sending email via SMTP...')
-    const messageId = await sendEmailViaSMTP(emailData)
-    console.log('Email sent successfully:', messageId)
+    console.log('Sending email via SMTP...');
+    const messageId = await sendEmailViaSMTP(emailData);
+    console.log('Email sent successfully:', messageId);
 
     return new Response(
       JSON.stringify({ success: true, messageId }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    );
 
   } catch (error) {
-    console.error('Email send error:', error)
+    console.error('Email send error:', error);
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       { 
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
-    )
+    );
   }
-})
+});
 
-// SMTP email sender using Gmail
+// SMTP email sender using Gmail (UPDATED to use deno_esmtp)
 async function sendEmailViaSMTP(emailData: any): Promise<string> {
-  const client = new SMTPClient({
-    hostname: 'smtp.gmail.com',
-    port: 587,
+  const client = new SmtpClient({
+    hostname: SMTP_CONFIG.host,
+    port: SMTP_CONFIG.port,
     tls: {
       starttls: true,
     },
-    username: Deno.env.get('EMAIL_USER')!,
-    password: Deno.env.get('EMAIL_PASSWORD')!,
-  })
+    username: SMTP_CONFIG.auth.user,
+    password: SMTP_CONFIG.auth.pass,
+  });
 
   try {
     await client.send({
@@ -237,15 +238,14 @@ async function sendEmailViaSMTP(emailData: any): Promise<string> {
       to: Array.isArray(emailData.to) ? emailData.to : [emailData.to],
       cc: emailData.cc,
       subject: emailData.subject,
-      content: emailData.html, // 👈 LET THE LIBRARY HANDLE MIME
       html: emailData.html,
-    })
+    });
 
-    await client.close()
-    return `${Date.now()}@autoriders.com`
+    await client.close();
+    return `${Date.now()}@autoriders.com`;
   } catch (err) {
-    try { await client.close() } catch {}
-    throw new Error(`Failed to send email: ${err.message}`)
+    try { await client.close(); } catch {}
+    throw new Error(`Failed to send email: ${err.message}`);
   }
 }
 
