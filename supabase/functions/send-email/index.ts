@@ -1,6 +1,6 @@
 // supabase/functions/send-email/index.ts
 
-import { SmtpClient } from "https://deno.land/x/deno_esmtp@smtp.ts";
+import { SmtpClient } from "https://deno.land/x/deno_esmtp/smtp.ts";
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const corsHeaders = {
