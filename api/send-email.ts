@@ -1,19 +1,13 @@
-// supabase/functions/send-email/index.ts
+// api/send-email.ts
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import nodemailer from 'nodemailer';
+import { createClient } from '@supabase/supabase-js';
 
-console.log('EMAIL_USER:', Deno.env.get('EMAIL_USER'));
-console.log('EMAIL_PASSWORD:', Deno.env.get('EMAIL_PASSWORD') ? '***' : 'undefined');
-console.log('APP_URL:', Deno.env.get('APP_URL'));
-
-import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
-import { SmtpClient } from "https://deno.land/x/deno_esmtp/smtp.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.36.0?target=deno";
-
+// CORS headers
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Max-Age': '86400',
-  // 'Access-Control-Allow-Credentials': 'true', // uncomment if needed
 };
 
 interface EmailRequest {
@@ -22,208 +16,16 @@ interface EmailRequest {
   approverRole?: 'ADMIN' | 'SUPER_ADMIN';
 }
 
-// Gmail SMTP configuration
-const SMTP_CONFIG = {
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false,
-  auth: {
-    user: Deno.env.get('EMAIL_USER')!,
-    pass: Deno.env.get('EMAIL_PASSWORD')!,
-  },
-};
-
-serve(async (req) => {
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: corsHeaders,
-    });
-  }
-
-  try {
-    const { type, costSheetId, approverRole } = await req.json() as EmailRequest;
-
-    console.log('Processing email request:', { type, costSheetId, approverRole });
-
-    // Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // Fetch email settings
-    const { data: settings, error: settingsError } = await supabase
-      .from('email_settings')
-      .select('*')
-      .single();
-
-    if (settingsError || !settings) {
-      throw new Error('Email settings not found');
-    }
-
-    if (!settings.notifications_enabled) {
-      console.log('Notifications are disabled');
-      return new Response(
-        JSON.stringify({ success: false, error: 'Notifications are disabled' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Fetch cost sheet with relations
-    const { data: costSheet, error: costSheetError } = await supabase
-      .from('cost_sheets')
-      .select(`
-        *,
-        created_by_user:users!cost_sheets_created_by_fkey(id, full_name, email),
-        approved_by_user:users!cost_sheets_approved_by_fkey(id, full_name, email, role),
-        vehicle:vehicles(brand_name, model_name, variant_name)
-      `)
-      .eq('id', costSheetId)
-      .single();
-
-    if (costSheetError || !costSheet) {
-      throw new Error('Cost sheet not found');
-    }
-
-    const appUrl = Deno.env.get('APP_URL') || 'http://localhost:5173';
-    const viewUrl = `${appUrl}/cost-sheets/${costSheetId}`;
-
-    let emailData: any;
-
-    if (type === 'submission') {
-      // Submission email - TO: Admins
-      const recipients = [
-        settings.super_admin_email,
-        ...(settings.admin_emails || []),
-      ].filter(email => email && typeof email === 'string' && email.includes('@'));
-
-      const uniqueRecipients = [...new Set(recipients)];
-
-      if (uniqueRecipients.length === 0) {
-        throw new Error('No valid admin emails configured');
-      }
-
-      const formattedDate = new Date(costSheet.submitted_at || costSheet.created_at)
-        .toLocaleString('en-IN', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Asia/Kolkata' });
-
-      const vehicleInfo = costSheet.vehicle
-        ? `${costSheet.vehicle.brand_name} ${costSheet.vehicle.model_name} - ${costSheet.vehicle.variant_name}`
-        : 'N/A';
-
-      const html = generateSubmissionEmail({
-        companyName: costSheet.company_name,
-        submitterName: costSheet.created_by_user.full_name,
-        submittedAt: formattedDate,
-        costSheetId,
-        viewUrl,
-        vehicleInfo,
-        grandTotal: costSheet.grand_total,
-      });
-
-      emailData = {
-        from: `AutoRiders <${SMTP_CONFIG.auth.user}>`,
-        to: uniqueRecipients,
-        subject: `🚗 New Cost Sheet Submitted - ${costSheet.company_name}`,
-        html,
-      };
-    } else if (type === 'approval') {
-      // Approval email - TO: Creator, CC: Other Admins
-      if (!costSheet.created_by_user.email || !costSheet.created_by_user.email.includes('@')) {
-        throw new Error('Creator email is invalid or missing');
-      }
-
-      let ccEmails: string[] = [];
-      if (approverRole === 'ADMIN') ccEmails = [settings.super_admin_email];
-      else if (approverRole === 'SUPER_ADMIN') ccEmails = settings.admin_emails || [];
-
-      ccEmails = [...new Set(ccEmails)].filter(
-        email => email && typeof email === 'string' && email.includes('@') && email !== costSheet.created_by_user.email
-      );
-
-      const formattedDate = new Date(costSheet.approved_at || new Date())
-        .toLocaleString('en-IN', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Asia/Kolkata' });
-
-      const vehicleInfo = costSheet.vehicle
-        ? `${costSheet.vehicle.brand_name} ${costSheet.vehicle.model_name} - ${costSheet.vehicle.variant_name}`
-        : 'N/A';
-
-      const html = generateApprovalEmail({
-        companyName: costSheet.company_name,
-        approverName: costSheet.approved_by_user.full_name,
-        approverRole: costSheet.approved_by_user.role,
-        approvedAt: formattedDate,
-        remarks: costSheet.approval_remarks,
-        viewUrl,
-        creatorName: costSheet.created_by_user.full_name,
-        vehicleInfo,
-        grandTotal: costSheet.grand_total,
-      });
-
-      emailData = {
-        from: `AutoRiders <${SMTP_CONFIG.auth.user}>`,
-        to: [costSheet.created_by_user.email],
-        cc: ccEmails.length > 0 ? ccEmails : undefined,
-        subject: `✅ Cost Sheet Approved - ${costSheet.company_name}`,
-        html,
-      };
-    } else {
-      throw new Error('Invalid email type');
-    }
-
-    // Send email
-    const messageId = await sendEmailViaSMTP(emailData);
-
-    return new Response(JSON.stringify({ success: true, messageId }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-
-  } catch (error: any) {
-    console.error('Email send error:', error);
-    return new Response(JSON.stringify({ success: false, error: error.message }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-});
-
-// SMTP email sender
-async function sendEmailViaSMTP(emailData: any): Promise<string> {
-  const client = new SmtpClient({
-    hostname: 'smtp.gmail.com',
-    port: 587,       // for STARTTLS
-    tls: { starttls: true },
-    username: Deno.env.get('EMAIL_USER')!,
-    password: Deno.env.get('EMAIL_PASSWORD')!,
-  });
-
-  try {
-    console.log("Connecting to Gmail SMTP...");
-    await client.connect();
-    console.log("Connected ✅");
-
-    await client.send({
-      from: emailData.from,
-      to: Array.isArray(emailData.to) ? emailData.to : [emailData.to],
-      cc: emailData.cc,
-      subject: emailData.subject,
-      html: emailData.html,
-    });
-    await client.close();
-    return `${Date.now()}@autoriders.com`;
-  } catch (err: any) {
-    try { await client.close(); } catch {}
-    throw new Error(`Failed to send email: ${err.message}`);
-  }
-}
-
-// Format currency
+// Format currency helper
 function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0,
+  }).format(amount);
 }
 
-// Email templates
+// Email template for submission
 function generateSubmissionEmail(data: any) {
   return `
 <!DOCTYPE html>
@@ -448,12 +250,13 @@ function generateSubmissionEmail(data: any) {
   </div>
 </body>
 </html>
-  `
+  `;
 }
 
+// Email template for approval
 function generateApprovalEmail(data: any) {
-  const roleDisplay = data.approverRole === 'SUPER_ADMIN' ? 'Super Admin' : 'Admin'
-  
+  const roleDisplay = data.approverRole === 'SUPER_ADMIN' ? 'Super Admin' : 'Admin';
+
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -676,12 +479,16 @@ function generateApprovalEmail(data: any) {
         <div class="amount">${formatCurrency(data.grandTotal)}</div>
       </div>
 
-      ${data.remarks && data.remarks !== 'Auto-approved (Superadmin)' ? `
+      ${
+        data.remarks && data.remarks !== 'Auto-approved (Superadmin)'
+          ? `
         <div class="remarks-box">
           <strong>💬 Approver's Remarks:</strong>
           <p>${data.remarks}</p>
         </div>
-      ` : ''}
+      `
+          : ''
+      }
 
       <div class="divider"></div>
 
@@ -709,5 +516,203 @@ function generateApprovalEmail(data: any) {
   </div>
 </body>
 </html>
-  `
+  `;
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return res.status(204).setHeader('Access-Control-Allow-Origin', '*').setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS').setHeader('Access-Control-Allow-Headers', 'authorization, x-client-info, apikey, content-type').end();
+  }
+
+  // Only allow POST requests
+  if (req.method !== 'POST') {
+    return res.status(405).json({ success: false, error: 'Method not allowed' });
+  }
+
+  try {
+    const { type, costSheetId, approverRole } = req.body as EmailRequest;
+
+    console.log('Processing email request:', { type, costSheetId, approverRole });
+
+    // Validate required environment variables
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+      throw new Error('Email credentials not configured');
+    }
+
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error('Supabase credentials not configured');
+    }
+
+    // Initialize Supabase client with service role key
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+
+    // Fetch email settings
+    const { data: settings, error: settingsError } = await supabase
+      .from('email_settings')
+      .select('*')
+      .single();
+
+    if (settingsError || !settings) {
+      throw new Error('Email settings not found');
+    }
+
+    if (!settings.notifications_enabled) {
+      console.log('Notifications are disabled');
+      return res.status(400).json({
+        success: false,
+        error: 'Notifications are disabled',
+      });
+    }
+
+    // Fetch cost sheet with relations
+    const { data: costSheet, error: costSheetError } = await supabase
+      .from('cost_sheets')
+      .select(
+        `
+        *,
+        created_by_user:users!cost_sheets_created_by_fkey(id, full_name, email),
+        approved_by_user:users!cost_sheets_approved_by_fkey(id, full_name, email, role),
+        vehicle:vehicles(brand_name, model_name, variant_name)
+      `
+      )
+      .eq('id', costSheetId)
+      .single();
+
+    if (costSheetError || !costSheet) {
+      throw new Error('Cost sheet not found');
+    }
+
+    const appUrl = process.env.APP_URL || 'http://localhost:5173';
+    const viewUrl = `${appUrl}/cost-sheets/${costSheetId}`;
+
+    let emailOptions: any;
+
+    if (type === 'submission') {
+      // Submission email - TO: Admins
+      const recipients = [
+        settings.super_admin_email,
+        ...(settings.admin_emails || []),
+      ].filter((email) => email && typeof email === 'string' && email.includes('@'));
+
+      const uniqueRecipients = [...new Set(recipients)];
+
+      if (uniqueRecipients.length === 0) {
+        throw new Error('No valid admin emails configured');
+      }
+
+      const formattedDate = new Date(
+        costSheet.submitted_at || costSheet.created_at
+      ).toLocaleString('en-IN', {
+        dateStyle: 'long',
+        timeStyle: 'short',
+        timeZone: 'Asia/Kolkata',
+      });
+
+      const vehicleInfo = costSheet.vehicle
+        ? `${costSheet.vehicle.brand_name} ${costSheet.vehicle.model_name} - ${costSheet.vehicle.variant_name}`
+        : 'N/A';
+
+      const html = generateSubmissionEmail({
+        companyName: costSheet.company_name,
+        submitterName: costSheet.created_by_user.full_name,
+        submittedAt: formattedDate,
+        costSheetId,
+        viewUrl,
+        vehicleInfo,
+        grandTotal: costSheet.grand_total,
+      });
+
+      emailOptions = {
+        from: `AutoRiders <${process.env.EMAIL_USER}>`,
+        to: uniqueRecipients.join(', '),
+        subject: `🚗 New Cost Sheet Submitted - ${costSheet.company_name}`,
+        html,
+      };
+    } else if (type === 'approval') {
+      // Approval email - TO: Creator, CC: Other Admins
+      if (
+        !costSheet.created_by_user.email ||
+        !costSheet.created_by_user.email.includes('@')
+      ) {
+        throw new Error('Creator email is invalid or missing');
+      }
+
+      let ccEmails: string[] = [];
+      if (approverRole === 'ADMIN') ccEmails = [settings.super_admin_email];
+      else if (approverRole === 'SUPER_ADMIN') ccEmails = settings.admin_emails || [];
+
+      ccEmails = [...new Set(ccEmails)].filter(
+        (email) =>
+          email &&
+          typeof email === 'string' &&
+          email.includes('@') &&
+          email !== costSheet.created_by_user.email
+      );
+
+      const formattedDate = new Date(
+        costSheet.approved_at || new Date()
+      ).toLocaleString('en-IN', {
+        dateStyle: 'long',
+        timeStyle: 'short',
+        timeZone: 'Asia/Kolkata',
+      });
+
+      const vehicleInfo = costSheet.vehicle
+        ? `${costSheet.vehicle.brand_name} ${costSheet.vehicle.model_name} - ${costSheet.vehicle.variant_name}`
+        : 'N/A';
+
+      const html = generateApprovalEmail({
+        companyName: costSheet.company_name,
+        approverName: costSheet.approved_by_user.full_name,
+        approverRole: costSheet.approved_by_user.role,
+        approvedAt: formattedDate,
+        remarks: costSheet.approval_remarks,
+        viewUrl,
+        creatorName: costSheet.created_by_user.full_name,
+        vehicleInfo,
+        grandTotal: costSheet.grand_total,
+      });
+
+      emailOptions = {
+        from: `AutoRiders <${process.env.EMAIL_USER}>`,
+        to: costSheet.created_by_user.email,
+        cc: ccEmails.length > 0 ? ccEmails.join(', ') : undefined,
+        subject: `✅ Cost Sheet Approved - ${costSheet.company_name}`,
+        html,
+      };
+    } else {
+      throw new Error('Invalid email type');
+    }
+
+    // Create Nodemailer transporter
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false, // use TLS
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD,
+      },
+    });
+
+    // Send email
+    console.log('Sending email via Nodemailer...');
+    const info = await transporter.sendMail(emailOptions);
+    console.log('Email sent successfully:', info.messageId);
+
+    return res.status(200).setHeader('Access-Control-Allow-Origin', '*').json({
+      success: true,
+      messageId: info.messageId,
+    });
+  } catch (error: any) {
+    console.error('Email send error:', error);
+    return res.status(400).setHeader('Access-Control-Allow-Origin', '*').json({
+      success: false,
+      error: error.message || 'Failed to send email',
+    });
+  }
 }

@@ -1,6 +1,5 @@
 // src/services/email/service.ts
 
-import { supabase } from '@/supabase/client';
 import type { EmailResponse } from './types';
 
 /**
@@ -11,16 +10,22 @@ export async function sendCostSheetSubmittedEmail(
   costSheetId: string
 ): Promise<EmailResponse> {
   try {
-    const { data, error } = await supabase.functions.invoke('send-email', {
-      body: {
+    const response = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         type: 'submission',
         costSheetId,
-      },
+      }),
     });
 
-    if (error) {
-      console.error('Edge function error:', error);
-      return { success: false, error: error.message };
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('API error:', data);
+      return { success: false, error: data.error || 'Unknown error' };
     }
 
     if (!data.success) {
@@ -47,17 +52,23 @@ export async function sendCostSheetApprovedEmail(
   approverRole: 'ADMIN' | 'SUPER_ADMIN'
 ): Promise<EmailResponse> {
   try {
-    const { data, error } = await supabase.functions.invoke('send-email', {
-      body: {
+    const response = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         type: 'approval',
         costSheetId,
         approverRole,
-      },
+      }),
     });
 
-    if (error) {
-      console.error('Edge function error:', error);
-      return { success: false, error: error.message };
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('API error:', data);
+      return { success: false, error: data.error || 'Unknown error' };
     }
 
     if (!data.success) {
