@@ -246,7 +246,6 @@ async function sendEmailViaSMTP(emailData: any): Promise<string> {
       from: emailData.from,
       to: toEmails,
       subject: emailData.subject,
-      content: 'auto',
       html: emailData.html,
     }
 
