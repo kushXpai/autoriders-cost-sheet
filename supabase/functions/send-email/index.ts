@@ -34,6 +34,8 @@ serve(async (req) => {
   try {
     const { type, costSheetId, approverRole } = await req.json() as EmailRequest
 
+    console.log('Processing email request:', { type, costSheetId, approverRole })
+
     // Get Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -47,10 +49,18 @@ serve(async (req) => {
       .single()
 
     if (settingsError || !settings) {
+      console.error('Email settings error:', settingsError)
       throw new Error('Email settings not found')
     }
 
+    console.log('Email settings loaded:', {
+      superAdmin: settings.super_admin_email,
+      adminCount: settings.admin_emails?.length || 0,
+      enabled: settings.notifications_enabled,
+    })
+
     if (!settings.notifications_enabled) {
+      console.log('Notifications are disabled')
       return new Response(
         JSON.stringify({ success: true, message: 'Notifications disabled' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -70,8 +80,15 @@ serve(async (req) => {
       .single()
 
     if (costSheetError || !costSheet) {
+      console.error('Cost sheet error:', costSheetError)
       throw new Error('Cost sheet not found')
     }
+
+    console.log('Cost sheet loaded:', {
+      id: costSheet.id,
+      company: costSheet.company_name,
+      creator: costSheet.created_by_user.email,
+    })
 
     const appUrl = Deno.env.get('APP_URL') || 'http://localhost:5173'
     const viewUrl = `${appUrl}/cost-sheets/${costSheetId}`
@@ -79,13 +96,19 @@ serve(async (req) => {
     let emailData: any
 
     if (type === 'submission') {
-      // Submission email
+      // Submission email - TO: Admins
       const recipients = [
         settings.super_admin_email,
-        ...settings.admin_emails,
-      ].filter(Boolean)
+        ...(settings.admin_emails || []),
+      ].filter(email => email && typeof email === 'string' && email.includes('@'))
 
       const uniqueRecipients = [...new Set(recipients)]
+
+      console.log('Submission recipients:', uniqueRecipients)
+
+      if (uniqueRecipients.length === 0) {
+        throw new Error('No valid admin emails configured')
+      }
 
       const formattedDate = new Date(costSheet.submitted_at || costSheet.created_at)
         .toLocaleString('en-IN', {
@@ -116,18 +139,29 @@ serve(async (req) => {
       }
 
     } else if (type === 'approval') {
-      // Approval email
+      // Approval email - TO: Creator, CC: Other Admins
+      
+      if (!costSheet.created_by_user.email || !costSheet.created_by_user.email.includes('@')) {
+        throw new Error('Creator email is invalid or missing')
+      }
+
       let ccEmails: string[] = []
 
       if (approverRole === 'ADMIN') {
         ccEmails = [settings.super_admin_email]
       } else if (approverRole === 'SUPER_ADMIN') {
-        ccEmails = settings.admin_emails
+        ccEmails = settings.admin_emails || []
       }
 
+      // Filter and validate CC emails
       ccEmails = [...new Set(ccEmails)].filter(
-        (email) => email !== costSheet.created_by_user.email
+        (email) => email && 
+                   typeof email === 'string' && 
+                   email.includes('@') && 
+                   email !== costSheet.created_by_user.email
       )
+
+      console.log('Approval email - TO:', costSheet.created_by_user.email, 'CC:', ccEmails)
 
       const formattedDate = new Date(costSheet.approved_at || new Date())
         .toLocaleString('en-IN', {
@@ -164,7 +198,9 @@ serve(async (req) => {
     }
 
     // Send email using SMTP
+    console.log('Sending email via SMTP...')
     const messageId = await sendEmailViaSMTP(emailData)
+    console.log('Email sent successfully:', messageId)
 
     return new Response(
       JSON.stringify({ success: true, messageId }),
@@ -187,6 +223,8 @@ serve(async (req) => {
 async function sendEmailViaSMTP(emailData: any): Promise<string> {
   const { SMTPClient } = await import('https://deno.land/x/denomailer@1.6.0/mod.ts')
 
+  console.log('Initializing SMTP client for:', SMTP_CONFIG.host)
+
   const client = new SMTPClient({
     connection: {
       hostname: SMTP_CONFIG.host,
@@ -200,32 +238,45 @@ async function sendEmailViaSMTP(emailData: any): Promise<string> {
   })
 
   try {
-    // Handle both single string and array for 'to' field
-    const toRecipients = Array.isArray(emailData.to) 
-      ? emailData.to.join(', ') 
-      : emailData.to
-
-    // Handle CC field
-    const ccRecipients = emailData.cc && Array.isArray(emailData.cc)
-      ? emailData.cc.join(', ')
-      : emailData.cc
-
-    await client.send({
+    // Ensure 'to' is always an array
+    const toEmails = Array.isArray(emailData.to) ? emailData.to : [emailData.to]
+    
+    // Build the email config
+    const mailConfig: any = {
       from: emailData.from,
-      to: toRecipients,
-      cc: ccRecipients,
+      to: toEmails,
       subject: emailData.subject,
       content: 'auto',
       html: emailData.html,
+    }
+
+    // Add CC only if it exists and has valid emails
+    if (emailData.cc && emailData.cc.length > 0) {
+      mailConfig.cc = Array.isArray(emailData.cc) ? emailData.cc : [emailData.cc]
+    }
+
+    console.log('Email config:', {
+      from: mailConfig.from,
+      to: mailConfig.to,
+      cc: mailConfig.cc,
+      subject: mailConfig.subject,
     })
 
+    await client.send(mailConfig)
+
     const messageId = `${Date.now()}-${Math.random().toString(36).substring(7)}@autoriders.com`
+    console.log('Email sent successfully with messageId:', messageId)
     return messageId
   } catch (error) {
     console.error('SMTP send error:', error)
-    throw error
+    throw new Error(`Failed to send email: ${error.message}`)
   } finally {
-    await client.close()
+    try {
+      await client.close()
+      console.log('SMTP client closed')
+    } catch (closeError) {
+      console.error('Error closing SMTP client (non-fatal):', closeError)
+    }
   }
 }
 
@@ -357,11 +408,6 @@ function generateSubmissionEmail(data: any) {
       font-size: 16px;
       margin: 25px 0;
       box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-      transition: transform 0.2s;
-    }
-    .button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
     }
     .footer {
       background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
@@ -621,11 +667,6 @@ function generateApprovalEmail(data: any) {
       font-size: 16px;
       margin: 25px 0;
       box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
-      transition: transform 0.2s;
-    }
-    .button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(16, 185, 129, 0.5);
     }
     .footer {
       background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
@@ -701,7 +742,7 @@ function generateApprovalEmail(data: any) {
         <div class="amount">${formatCurrency(data.grandTotal)}</div>
       </div>
 
-      ${data.remarks ? `
+      ${data.remarks && data.remarks !== 'Auto-approved (Superadmin)' ? `
         <div class="remarks-box">
           <strong>💬 Approver's Remarks:</strong>
           <p>${data.remarks}</p>
