@@ -1,5 +1,9 @@
 // supabase/functions/send-email/index.ts
 
+console.log('EMAIL_USER:', Deno.env.get('EMAIL_USER'));
+console.log('EMAIL_PASSWORD:', Deno.env.get('EMAIL_PASSWORD') ? '***' : 'undefined');
+console.log('APP_URL:', Deno.env.get('APP_URL'));
+
 import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
 import { SmtpClient } from "https://deno.land/x/deno_esmtp/smtp.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.36.0?target=deno";
