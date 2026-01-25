@@ -1,6 +1,6 @@
 // supabase/functions/send-email/index.ts
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { SMTPClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts"
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 const corsHeaders = {
@@ -20,7 +20,7 @@ const SMTP_CONFIG = {
   port: 587,
   secure: false,
   auth: {
-    user: Deno.env.get('EMAIL_USER') || 'app.autoriders@gmail.com',
+    user: Deno.env.get('EMAIL_USER')!,
     pass: Deno.env.get('EMAIL_PASSWORD'),
   },
 }
@@ -221,62 +221,31 @@ serve(async (req) => {
 
 // SMTP email sender using Gmail
 async function sendEmailViaSMTP(emailData: any): Promise<string> {
-  const { SMTPClient } = await import('https://deno.land/x/denomailer@1.6.0/mod.ts')
-
-  console.log('Initializing SMTP client for:', SMTP_CONFIG.host)
-
   const client = new SMTPClient({
-    connection: {
-      hostname: SMTP_CONFIG.host,
-      port: SMTP_CONFIG.port,
-      tls: true,
-      auth: {
-        username: SMTP_CONFIG.auth.user,
-        password: SMTP_CONFIG.auth.pass,
-      },
+    hostname: 'smtp.gmail.com',
+    port: 587,
+    tls: {
+      starttls: true,
     },
+    username: Deno.env.get('EMAIL_USER')!,
+    password: Deno.env.get('EMAIL_PASSWORD')!,
   })
 
   try {
-    // Ensure 'to' is always an array
-    const toEmails = Array.isArray(emailData.to) ? emailData.to : [emailData.to]
-    
-    // Build the email config
-    const mailConfig: any = {
+    await client.send({
       from: emailData.from,
-      to: toEmails,
+      to: Array.isArray(emailData.to) ? emailData.to : [emailData.to],
+      cc: emailData.cc,
       subject: emailData.subject,
-      content: "text/html",
+      content: emailData.html, // 👈 LET THE LIBRARY HANDLE MIME
       html: emailData.html,
-    }
-
-    // Add CC only if it exists and has valid emails
-    if (emailData.cc && emailData.cc.length > 0) {
-      mailConfig.cc = Array.isArray(emailData.cc) ? emailData.cc : [emailData.cc]
-    }
-
-    console.log('Email config:', {
-      from: mailConfig.from,
-      to: mailConfig.to,
-      cc: mailConfig.cc,
-      subject: mailConfig.subject,
     })
 
-    await client.send(mailConfig)
-
-    const messageId = `${Date.now()}-${Math.random().toString(36).substring(7)}@autoriders.com`
-    console.log('Email sent successfully with messageId:', messageId)
-    return messageId
-  } catch (error) {
-    console.error('SMTP send error:', error)
-    throw new Error(`Failed to send email: ${error.message}`)
-  } finally {
-    try {
-      await client.close()
-      console.log('SMTP client closed')
-    } catch (closeError) {
-      console.error('Error closing SMTP client (non-fatal):', closeError)
-    }
+    await client.close()
+    return `${Date.now()}@autoriders.com`
+  } catch (err) {
+    try { await client.close() } catch {}
+    throw new Error(`Failed to send email: ${err.message}`)
   }
 }
 
