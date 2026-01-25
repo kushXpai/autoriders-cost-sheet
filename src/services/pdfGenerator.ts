@@ -1,7 +1,7 @@
+// src/services/pdfGenerator.ts
 import jsPDF from 'jspdf';
 import type { CostSheet, Vehicle } from '@/types';
 
-// Clean currency formatter - using Rs. instead of ₹ for PDF compatibility
 function cleanFormatCurrency(value: number): string {
   if (isNaN(value)) return 'Rs. 0.00';
   const formatted = new Intl.NumberFormat('en-IN', {

@@ -1,11 +1,6 @@
 // src/services/email/service.ts
-
 import type { EmailResponse } from './types';
 
-/**
- * Send email when a cost sheet is submitted for approval
- * Sends to: Super Admin + All Admin emails
- */
 export async function sendCostSheetSubmittedEmail(
   costSheetId: string
 ): Promise<EmailResponse> {
@@ -43,10 +38,6 @@ export async function sendCostSheetSubmittedEmail(
   }
 }
 
-/**
- * Send email when a cost sheet is approved
- * Sends to: Creator (To) + Super Admin or Admins (CC) based on approver role
- */
 export async function sendCostSheetApprovedEmail(
   costSheetId: string,
   approverRole: 'ADMIN' | 'SUPER_ADMIN'

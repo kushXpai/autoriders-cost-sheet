@@ -1,5 +1,4 @@
 // src/services/email/types.ts
-
 export interface EmailRecipient {
   email: string;
   name?: string;

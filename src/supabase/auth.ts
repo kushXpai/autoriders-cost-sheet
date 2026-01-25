@@ -1,3 +1,4 @@
+// src/supabase/auth.ts
 import { supabase } from './client';
 import type { User } from '@/types';
 
