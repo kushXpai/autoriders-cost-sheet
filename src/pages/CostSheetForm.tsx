@@ -162,10 +162,11 @@ export default function CostSheetForm() {
 
       const now = new Date().toISOString();
 
-      // Superadmin's own sheets are auto-approved, regular users save as DRAFT
-      const autoSaveStatus: CostSheetStatus = isAdmin ? 'APPROVED' : 'DRAFT';
+      const autoSaveStatus: CostSheetStatus = 
+        isAdmin && !isEditing ? 'APPROVED' : 
+        isEditing ? 'PENDING_APPROVAL' : 
+        'DRAFT';
 
-      // Get selected vehicle for fallback values
       const selectedVehicle = vehicles.find(v => v.id === formDataRef.current.vehicle_id);
 
       const costSheetData: Omit<CostSheet, 'id' | 'created_at' | 'updated_at'> = {
@@ -202,10 +203,10 @@ export default function CostSheetForm() {
         admin_charge_amount: safeCalculations.admin_charge_amount,
         grand_total: safeCalculations.grand_total,
         status: autoSaveStatus,
-        approval_remarks: isAdmin ? 'Auto-approved (Superadmin)' : '',
-        submitted_at: isAdmin ? now : null,
-        approved_at: isAdmin ? now : null,
-        approved_by: isAdmin ? user.id : null,
+        approval_remarks: '',
+        submitted_at: autoSaveStatus === 'PENDING_APPROVAL' || autoSaveStatus === 'APPROVED' ? now : null,
+        approved_at: autoSaveStatus === 'APPROVED' ? now : null,
+        approved_by: autoSaveStatus === 'APPROVED' ? user.id : null,
         pdf_url: null,
         created_by: (isEditing && originalCreatedBy) ? originalCreatedBy : user.id,
       };
@@ -803,6 +804,59 @@ export default function CostSheetForm() {
           <AutoSaveIndicator />
         </div>
 
+        {/* Action Buttons - MOVED TO TOP */}
+        <div className="flex flex-col gap-3">
+          {isAdmin && (
+            <p className="text-sm text-green-600 font-medium text-center">
+              ✓ As a superadmin, your cost sheets are automatically approved when you click Save Changes
+            </p>
+          )}
+          {isEditing && !isAdmin && (
+            <p className="text-sm text-muted-foreground text-center">
+              Editing will reset the cost sheet to Draft status. Submit for approval after saving.
+            </p>
+          )}
+          <div className="flex gap-3 justify-end">
+            {!isAdmin && (
+              <Button variant="outline" onClick={() => navigate('/cost-sheets')} disabled={loading}>
+                Cancel
+              </Button>
+            )}
+            {isAdmin ? (
+              // Superadmin only sees one button - everything is auto-approved
+              <Button
+                onClick={() => saveCostSheet('APPROVED')}
+                disabled={loading || !user}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                {isEditing ? 'Save Changes' : 'Create Cost Sheet'}
+              </Button>
+            ) : (
+              // Regular users see Draft and Submit buttons
+              <>
+                <Button
+                  variant="secondary"
+                  onClick={() => saveCostSheet('DRAFT')}
+                  disabled={loading || !user}
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {isEditing ? 'Save Changes (Draft)' : 'Save as Draft'}
+                </Button>
+                {!isEditing && (
+                  <Button
+                    onClick={() => saveCostSheet('PENDING_APPROVAL')}
+                    disabled={loading || !user}
+                  >
+                    <Send className="w-4 h-4 mr-2" />
+                    Submit for Approval
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
         {/* Company, City & Vehicle Section */}
         <Card>
           <CardHeader>
@@ -1293,80 +1347,7 @@ export default function CostSheetForm() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Action Buttons */}
-        <div className="flex flex-col gap-3 pb-6">
-          {isAdmin && (
-            <p className="text-sm text-green-600 font-medium text-center">
-              ✓ As a superadmin, your cost sheets are automatically approved
-            </p>
-          )}
-          {isEditing && !isAdmin && (
-            <p className="text-sm text-muted-foreground text-center">
-              Editing will reset the cost sheet to Draft status. Submit for approval after saving.
-            </p>
-          )}
-          <div className="flex gap-3 justify-end">
-            {!isAdmin && (
-              <Button variant="outline" onClick={() => navigate('/cost-sheets')} disabled={loading}>
-                Cancel
-              </Button>
-            )}
-            {isAdmin ? (
-              // Superadmin only sees one button - everything is auto-approved
-              <Button
-                onClick={() => saveCostSheet('APPROVED')}
-                disabled={loading || !user}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                <CheckCircle2 className="w-4 h-4 mr-2" />
-                {isEditing ? 'Save Changes' : 'Create Cost Sheet'}
-              </Button>
-            ) : (
-              // Regular users see Draft and Submit buttons
-              <>
-                <Button
-                  variant="secondary"
-                  onClick={() => saveCostSheet('DRAFT')}
-                  disabled={loading || !user}
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  {isEditing ? 'Save Changes (Draft)' : 'Save as Draft'}
-                </Button>
-                {!isEditing && (
-                  <Button
-                    onClick={() => saveCostSheet('PENDING_APPROVAL')}
-                    disabled={loading || !user}
-                  >
-                    <Send className="w-4 h-4 mr-2" />
-                    Submit for Approval
-                  </Button>
-                )}
-              </>
-            )}
-          </div>
-        </div>
       </div>
-
-      {/* Draft Restore Dialog */}
-      {/* <AlertDialog open={showRestoreDialog} onOpenChange={setShowRestoreDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Restore Unsaved Draft?</AlertDialogTitle>
-            <AlertDialogDescription>
-              We found an unsaved draft from{' '}
-              {draftToRestore && ('formData' in draftToRestore
-                ? new Date(draftToRestore.timestamp).toLocaleString()
-                : new Date(draftToRestore.updated_at).toLocaleString())}
-              . Would you like to restore it?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={discardDraft}>Discard</AlertDialogCancel>
-            <AlertDialogAction onClick={restoreDraft}>Restore</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog> */}
 
       {/* Navigation Blocker Dialog */}
       {blocker.state === 'blocked' && (
