@@ -88,6 +88,7 @@ export default function CostSheetForm() {
   const [insuranceRate, setInsuranceRate] = useState(3.5);
   const [fuelRate, setFuelRate] = useState(0);
   const [originalCreatedBy, setOriginalCreatedBy] = useState<string | null>(null);
+  const [originalStatus, setOriginalStatus] = useState<CostSheetStatus | null>(null);
 
   // Auto-save state
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -163,8 +164,8 @@ export default function CostSheetForm() {
       const now = new Date().toISOString();
 
       const autoSaveStatus: CostSheetStatus = 
-        isAdmin && !isEditing ? 'APPROVED' : 
-        isEditing ? 'PENDING_APPROVAL' : 
+        isEditing && originalStatus ? originalStatus : 
+        isAdmin ? 'APPROVED' : 
         'DRAFT';
 
       const selectedVehicle = vehicles.find(v => v.id === formDataRef.current.vehicle_id);
@@ -203,10 +204,10 @@ export default function CostSheetForm() {
         admin_charge_amount: safeCalculations.admin_charge_amount,
         grand_total: safeCalculations.grand_total,
         status: autoSaveStatus,
-        approval_remarks: '',
-        submitted_at: autoSaveStatus === 'PENDING_APPROVAL' || autoSaveStatus === 'APPROVED' ? now : null,
-        approved_at: autoSaveStatus === 'APPROVED' ? now : null,
-        approved_by: autoSaveStatus === 'APPROVED' ? user.id : null,
+        approval_remarks: (autoSaveStatus === 'APPROVED' && isAdmin && !isEditing) ? 'Auto-approved (Superadmin)' : '',
+        submitted_at: (autoSaveStatus === 'PENDING_APPROVAL' || autoSaveStatus === 'APPROVED') && !isEditing ? now : null,
+        approved_at: autoSaveStatus === 'APPROVED' && !isEditing ? now : null,
+        approved_by: autoSaveStatus === 'APPROVED' && !isEditing ? user.id : null,
         pdf_url: null,
         created_by: (isEditing && originalCreatedBy) ? originalCreatedBy : user.id,
       };
@@ -257,7 +258,7 @@ export default function CostSheetForm() {
       setAutoSaveStatus('error');
       setTimeout(() => setAutoSaveStatus('idle'), 3000);
     }
-  }, [user, isEditing, id, vehicles, interestRate, adminChargePercent, insuranceRate, fuelRate, isAdmin]);
+  }, [user, isEditing, id, vehicles, interestRate, adminChargePercent, insuranceRate, fuelRate, isAdmin, originalStatus]);
 
   // Helper to calculate with current data
   const calculateWithCurrentData = () => {
@@ -461,6 +462,7 @@ export default function CostSheetForm() {
 
       if (data) {
         setOriginalCreatedBy(data.created_by);
+        setOriginalStatus(data.status);
 
         const exShowroomPrice = data.ex_showroom_price || 1;
         const downPaymentPercent = data.down_payment_amount && exShowroomPrice > 0
