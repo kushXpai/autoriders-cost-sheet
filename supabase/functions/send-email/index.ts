@@ -1,17 +1,11 @@
 // supabase/functions/send-email/index.ts
 
-['EMAIL_USER', 'EMAIL_PASSWORD', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'APP_URL'].forEach(key => {
-  if (!Deno.env.get(key)) throw new Error(`${key} is missing in environment variables`);
-});
-
-import { serve } from "https://deno.land/std@0.203.0/http/server.ts";
-import { connect } from "https://deno.land/x/smtp@v0.7.0/mod.ts"
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.34.0/dist/supabase.js';
+import { SMTPClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts"
+import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 }
 
 interface EmailRequest {
@@ -27,14 +21,14 @@ const SMTP_CONFIG = {
   secure: false,
   auth: {
     user: Deno.env.get('EMAIL_USER')!,
-    pass: Deno.env.get('EMAIL_PASSWORD')!,
+    pass: Deno.env.get('EMAIL_PASSWORD'),
   },
 }
 
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { status: 200, headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders })
   }
 
   try {
@@ -227,22 +221,26 @@ serve(async (req) => {
 
 // SMTP email sender using Gmail
 async function sendEmailViaSMTP(emailData: any): Promise<string> {
-  const client = await connect({
+  const client = new SMTPClient({
     hostname: 'smtp.gmail.com',
     port: 587,
+    tls: {
+      starttls: true,
+    },
     username: Deno.env.get('EMAIL_USER')!,
     password: Deno.env.get('EMAIL_PASSWORD')!,
-    tls: { starttls: true },
   })
 
   try {
     await client.send({
       from: emailData.from,
       to: Array.isArray(emailData.to) ? emailData.to : [emailData.to],
-      cc: Array.isArray(emailData.cc) ? emailData.cc : undefined,
+      cc: emailData.cc,
       subject: emailData.subject,
-      content: emailData.html,
-    });
+      content: emailData.html, // 👈 LET THE LIBRARY HANDLE MIME
+      html: emailData.html,
+    })
+
     await client.close()
     return `${Date.now()}@autoriders.com`
   } catch (err) {
