@@ -6,10 +6,10 @@
     }
   ],
   "env": {
-    "EMAIL_USER": "@email-user",
-    "EMAIL_PASSWORD": "@email-password",
-    "APP_URL": "@app-url",
-    "SUPABASE_URL": "@supabase-url",
-    "SUPABASE_SERVICE_ROLE_KEY": "@supabase-service-role-key"
+    "EMAIL_USER": "@EMAIL_USER",
+    "EMAIL_PASSWORD": "@EMAIL_PASSWORD",
+    "APP_URL": "@APP_URL",
+    "SUPABASE_URL": "@SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY": "@SUPABASE_SERVICE_ROLE_KEY"
   }
 }
