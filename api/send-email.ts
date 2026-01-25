@@ -238,8 +238,8 @@ function generateSubmissionEmail(data: any) {
     </div>
 
     <div class="footer">
-      <p class="company">© ${new Date().getFullYear()} AutoRiders Fleet Management</p>
-      <p>This is an automated notification from AutoRiders Cost Sheet Management System.</p>
+      <p class="company">© ${new Date().getFullYear()} Autoriders Fleet Management</p>
+      <p>This is an automated notification from Autoriders Cost Sheet Management System.</p>
       <p>Please do not reply to this email. For support, contact your system administrator.</p>
     </div>
   </div>
@@ -499,8 +499,8 @@ function generateApprovalEmail(data: any) {
     </div>
 
     <div class="footer">
-      <p class="company">© ${new Date().getFullYear()} AutoRiders Fleet Management</p>
-      <p>This is an automated notification from AutoRiders Cost Sheet Management System.</p>
+      <p class="company">© ${new Date().getFullYear()} Autoriders Fleet Management</p>
+      <p>This is an automated notification from Autoriders Cost Sheet Management System.</p>
       <p>Please do not reply to this email. For support, contact your system administrator.</p>
     </div>
   </div>
@@ -725,8 +725,8 @@ function generateRejectionEmail(data: any) {
     </div>
 
     <div class="footer">
-      <p class="company">© ${new Date().getFullYear()} AutoRiders Fleet Management</p>
-      <p>This is an automated notification from AutoRiders Cost Sheet Management System.</p>
+      <p class="company">© ${new Date().getFullYear()} Autoriders Fleet Management</p>
+      <p>This is an automated notification from Autoriders Cost Sheet Management System.</p>
       <p>Please do not reply to this email. For support, contact your system administrator.</p>
     </div>
   </div>
@@ -843,7 +843,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
 
       emailOptions = {
-        from: `AutoRiders <${process.env.EMAIL_USER}>`,
+        from: `Autoriders <${process.env.EMAIL_USER}>`,
         to: uniqueRecipients.join(', '),
         subject: `🚗 New Cost Sheet Submitted - ${costSheet.company_name}`,
         html,
@@ -894,7 +894,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
 
       emailOptions = {
-        from: `AutoRiders <${process.env.EMAIL_USER}>`,
+        from: `Autoriders <${process.env.EMAIL_USER}>`,
         to: costSheet.created_by_user.email,
         cc: ccEmails.length > 0 ? ccEmails.join(', ') : undefined,
         subject: `✅ Cost Sheet Approved - ${costSheet.company_name}`,
@@ -945,7 +945,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
 
       emailOptions = {
-        from: `AutoRiders <${process.env.EMAIL_USER}>`,
+        from: `Autoriders <${process.env.EMAIL_USER}>`,
         to: costSheet.created_by_user.email,
         cc: ccEmails.length > 0 ? ccEmails.join(', ') : undefined,
         subject: `❌ Cost Sheet Rejected - ${costSheet.company_name}`,
