@@ -20,6 +20,7 @@ import CostSheets from "@/pages/CostSheets";
 import CostSheetForm from "@/pages/CostSheetForm";
 import CostSheetDetail from "@/pages/CostSheetDetail";
 import NotFound from "@/pages/NotFound";
+import Cities from "./pages/Cities";
 
 const queryClient = new QueryClient();
 
@@ -36,6 +37,7 @@ const router = createBrowserRouter([
       { path: "/cost-sheets/new", element: <CostSheetForm /> },
       { path: "/cost-sheets/:id", element: <CostSheetDetail /> },
       { path: "/cost-sheets/:id/edit", element: <CostSheetForm /> },
+      { path: "/cities", element: <Cities /> },
       { path: "/vehicles", element: <Vehicles /> },
       { path: "/fuel-rates", element: <FuelRates /> },
       { path: "/interest-rate", element: <ProtectedRoute requireSuperAdmin><InterestRate /></ProtectedRoute> },
