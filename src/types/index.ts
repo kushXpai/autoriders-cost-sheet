@@ -9,14 +9,14 @@ export interface User {
   email: string;
   password?: string;
   role: UserRole;
-  reports_to: string | null; // NEW: References another user's ID (Regional Manager)
+  reports_to: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
 }
 
 // Vehicle Types
-export type FuelType = 'PETROL' | 'DIESEL' | 'HYBRID' | 'EV';
+export type FuelType = 'PETROL' | 'DIESEL' | 'EV';
 
 export interface Vehicle {
   id: string;
@@ -24,6 +24,7 @@ export interface Vehicle {
   model_name: string;
   variant_name: string;
   fuel_type: FuelType;
+  is_hybrid: boolean;
   mileage_km_per_unit: number;
   maintenance_cost_per_km: number;
   is_active: boolean;
@@ -47,8 +48,7 @@ export type City =
 // Fuel Rate Types
 export interface FuelRate {
   id: string;
-  // Exclude HYBRID from FuelType
-  fuel_type: Exclude<FuelType, 'HYBRID'>;
+  fuel_type: FuelType;
   city: City;
   rate_per_unit: number;
   effective_date: string;
@@ -105,7 +105,6 @@ export interface CostSheet {
   tenure_years: number;
   tenure_months: number;
 
-  // CHANGED: Added new fields for ex-showroom and on-road
   ex_showroom_price: number;
   insurance_amount_monthly: number;
   registration_monthly: number;
@@ -190,7 +189,6 @@ export interface CostSheetFormData {
 export interface CalculatedFields {
   tenure_months: number;
 
-  // CHANGED: Added new calculated fields
   insurance_amount_monthly: number;
   registration_monthly: number;
   on_road_price: number;

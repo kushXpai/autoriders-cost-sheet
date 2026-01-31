@@ -63,7 +63,14 @@ import { supabase } from '@/supabase/client';
 import type { Vehicle, FuelType } from '@/types';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
-const FUEL_TYPES: FuelType[] = ['PETROL', 'DIESEL', 'HYBRID', 'EV'];
+const getFuelTypeBadgeText = (vehicle: Vehicle): string => {
+  if (vehicle.is_hybrid) {
+    return `${vehicle.fuel_type} HYBRID`;
+  }
+  return vehicle.fuel_type;
+};
+
+const FUEL_TYPES: FuelType[] = ['PETROL', 'DIESEL', 'EV'];
 const ITEMS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
 
 type SortField = 'brand_name' | 'model_name' | 'mileage_km_per_unit' | 'maintenance_cost_per_km';
@@ -71,6 +78,7 @@ type SortDirection = 'asc' | 'desc';
 
 interface VariantFormData {
   fuel_type: FuelType;
+  is_hybrid: boolean;
   variant_name: string;
   mileage_km_per_unit: string;
   maintenance_cost_per_km: string;
@@ -94,10 +102,9 @@ export default function Vehicles() {
     brand_name: '',
     model_name: '',
     variants: [
-      { fuel_type: 'PETROL' as FuelType, variant_name: '', mileage_km_per_unit: '', maintenance_cost_per_km: '', enabled: true },
-      { fuel_type: 'DIESEL' as FuelType, variant_name: '', mileage_km_per_unit: '', maintenance_cost_per_km: '', enabled: false },
-      { fuel_type: 'HYBRID' as FuelType, variant_name: '', mileage_km_per_unit: '', maintenance_cost_per_km: '', enabled: false },
-      { fuel_type: 'EV' as FuelType, variant_name: '', mileage_km_per_unit: '', maintenance_cost_per_km: '', enabled: false },
+      { fuel_type: 'PETROL' as FuelType, is_hybrid: false, variant_name: '', mileage_km_per_unit: '', maintenance_cost_per_km: '', enabled: true },
+      { fuel_type: 'DIESEL' as FuelType, is_hybrid: false, variant_name: '', mileage_km_per_unit: '', maintenance_cost_per_km: '', enabled: false },
+      { fuel_type: 'EV' as FuelType, is_hybrid: false, variant_name: '', mileage_km_per_unit: '', maintenance_cost_per_km: '', enabled: false },
     ] as VariantFormData[],
   });
 
@@ -156,18 +163,18 @@ export default function Vehicles() {
         { event: '*', schema: 'public', table: 'vehicles' },
         (payload) => {
           console.log('Real-time update:', payload);
-          
+
           if (payload.eventType === 'INSERT') {
-            setVehicles(prev => [...prev, payload.new as Vehicle].sort((a, b) => 
+            setVehicles(prev => [...prev, payload.new as Vehicle].sort((a, b) =>
               a.brand_name.localeCompare(b.brand_name)
             ));
-            toast({ 
-              title: 'New vehicle added', 
-              description: `${payload.new.brand_name} ${payload.new.model_name} has been added.` 
+            toast({
+              title: 'New vehicle added',
+              description: `${payload.new.brand_name} ${payload.new.model_name} has been added.`
             });
           } else if (payload.eventType === 'UPDATE') {
-            setVehicles(prev => 
-              prev.map(vehicle => 
+            setVehicles(prev =>
+              prev.map(vehicle =>
                 vehicle.id === payload.new.id ? payload.new as Vehicle : vehicle
               )
             );
@@ -191,10 +198,9 @@ export default function Vehicles() {
       brand_name: '',
       model_name: '',
       variants: [
-        { fuel_type: 'PETROL', variant_name: '', mileage_km_per_unit: '', maintenance_cost_per_km: '', enabled: true },
-        { fuel_type: 'DIESEL', variant_name: '', mileage_km_per_unit: '', maintenance_cost_per_km: '', enabled: false },
-        { fuel_type: 'HYBRID', variant_name: '', mileage_km_per_unit: '', maintenance_cost_per_km: '', enabled: false },
-        { fuel_type: 'EV', variant_name: '', mileage_km_per_unit: '', maintenance_cost_per_km: '', enabled: false },
+        { fuel_type: 'PETROL', is_hybrid: false, variant_name: '', mileage_km_per_unit: '', maintenance_cost_per_km: '', enabled: true },
+        { fuel_type: 'DIESEL', is_hybrid: false, variant_name: '', mileage_km_per_unit: '', maintenance_cost_per_km: '', enabled: false },
+        { fuel_type: 'EV', is_hybrid: false, variant_name: '', mileage_km_per_unit: '', maintenance_cost_per_km: '', enabled: false },
       ],
     });
     setEditingVehicle(null);
@@ -209,12 +215,13 @@ export default function Vehicles() {
         brand_name: vehicle.brand_name,
         model_name: vehicle.model_name,
         variants: [
-          { 
-            fuel_type: vehicle.fuel_type, 
-            variant_name: vehicle.variant_name, 
-            mileage_km_per_unit: vehicle.mileage_km_per_unit.toString(), 
+          {
+            fuel_type: vehicle.fuel_type,
+            is_hybrid: vehicle.is_hybrid || false,
+            variant_name: vehicle.variant_name,
+            mileage_km_per_unit: vehicle.mileage_km_per_unit.toString(),
             maintenance_cost_per_km: vehicle.maintenance_cost_per_km.toString(),
-            enabled: true 
+            enabled: true
           },
         ],
       });
@@ -226,17 +233,18 @@ export default function Vehicles() {
 
   /* ---------------- DUPLICATE VEHICLE ---------------- */
   const handleDuplicateVehicle = useCallback((vehicle: Vehicle) => {
-    setEditingVehicle(null); // Not editing, creating new
+    setEditingVehicle(null);
     setFormData({
       brand_name: vehicle.brand_name,
       model_name: vehicle.model_name,
       variants: [
-        { 
-          fuel_type: vehicle.fuel_type, 
-          variant_name: vehicle.variant_name + ' (Copy)', 
-          mileage_km_per_unit: vehicle.mileage_km_per_unit.toString(), 
+        {
+          fuel_type: vehicle.fuel_type,
+          is_hybrid: vehicle.is_hybrid || false,
+          variant_name: vehicle.variant_name + ' (Copy)',
+          mileage_km_per_unit: vehicle.mileage_km_per_unit.toString(),
           maintenance_cost_per_km: vehicle.maintenance_cost_per_km.toString(),
-          enabled: true 
+          enabled: true
         },
       ],
     });
@@ -247,17 +255,17 @@ export default function Vehicles() {
   const toggleVariant = useCallback((index: number) => {
     setFormData(prev => ({
       ...prev,
-      variants: prev.variants.map((v, i) => 
+      variants: prev.variants.map((v, i) =>
         i === index ? { ...v, enabled: !v.enabled } : v
       )
     }));
   }, []);
 
   /* ---------------- UPDATE VARIANT FIELD ---------------- */
-  const updateVariantField = useCallback((index: number, field: keyof VariantFormData, value: string | FuelType) => {
+  const updateVariantField = useCallback((index: number, field: keyof VariantFormData, value: string | FuelType | boolean) => {
     setFormData(prev => ({
       ...prev,
-      variants: prev.variants.map((v, i) => 
+      variants: prev.variants.map((v, i) =>
         i === index ? { ...v, [field]: value } : v
       )
     }));
@@ -299,19 +307,19 @@ export default function Vehicles() {
     }
 
     // Validate enabled variants
-    const invalidVariants = enabledVariants.filter(v => 
-      !v.variant_name || 
-      !v.mileage_km_per_unit || 
+    const invalidVariants = enabledVariants.filter(v =>
+      !v.variant_name ||
+      !v.mileage_km_per_unit ||
       parseFloat(v.mileage_km_per_unit) <= 0 ||
       !v.maintenance_cost_per_km ||
       parseFloat(v.maintenance_cost_per_km) < 0
     );
 
     if (invalidVariants.length > 0) {
-      toast({ 
-        title: 'Invalid variant data', 
-        description: 'Please fill all required fields for selected variants with valid values.', 
-        variant: 'destructive' 
+      toast({
+        title: 'Invalid variant data',
+        description: 'Please fill all required fields for selected variants with valid values.',
+        variant: 'destructive'
       });
       setSubmitting(false);
       return;
@@ -325,6 +333,7 @@ export default function Vehicles() {
           model_name: formData.model_name,
           variant_name: enabledVariants[0].variant_name,
           fuel_type: enabledVariants[0].fuel_type,
+          is_hybrid: enabledVariants[0].is_hybrid,
           mileage_km_per_unit: parseFloat(enabledVariants[0].mileage_km_per_unit),
           maintenance_cost_per_km: parseFloat(enabledVariants[0].maintenance_cost_per_km),
         };
@@ -333,7 +342,7 @@ export default function Vehicles() {
           .from('vehicles')
           .update(vehicleData)
           .eq('id', editingVehicle.id);
-        
+
         if (error) throw error;
         toast({ title: 'Vehicle updated successfully' });
       } else {
@@ -343,6 +352,7 @@ export default function Vehicles() {
           model_name: formData.model_name,
           variant_name: v.variant_name,
           fuel_type: v.fuel_type,
+          is_hybrid: v.is_hybrid,
           mileage_km_per_unit: parseFloat(v.mileage_km_per_unit),
           maintenance_cost_per_km: parseFloat(v.maintenance_cost_per_km),
         }));
@@ -350,11 +360,11 @@ export default function Vehicles() {
         const { error } = await supabase
           .from('vehicles')
           .insert(vehiclesToInsert);
-        
+
         if (error) throw error;
-        toast({ 
-          title: 'Success!', 
-          description: `${enabledVariants.length} vehicle variant(s) added successfully.` 
+        toast({
+          title: 'Success!',
+          description: `${enabledVariants.length} vehicle variant(s) added successfully.`
         });
       }
 
@@ -371,8 +381,8 @@ export default function Vehicles() {
   /* ---------------- TOGGLE ACTIVE (WITH OPTIMISTIC UPDATE) ---------------- */
   const handleToggleActive = useCallback(async (vehicle: Vehicle) => {
     // Optimistic update
-    setVehicles(prev => 
-      prev.map(v => 
+    setVehicles(prev =>
+      prev.map(v =>
         v.id === vehicle.id ? { ...v, is_active: !v.is_active } : v
       )
     );
@@ -382,17 +392,17 @@ export default function Vehicles() {
         .from('vehicles')
         .update({ is_active: !vehicle.is_active })
         .eq('id', vehicle.id);
-      
+
       if (error) throw error;
 
-      toast({ 
+      toast({
         title: vehicle.is_active ? 'Vehicle deactivated' : 'Vehicle activated',
         description: `${vehicle.brand_name} ${vehicle.model_name} is now ${!vehicle.is_active ? 'active' : 'inactive'}`
       });
     } catch (err: any) {
       // Revert optimistic update on error
-      setVehicles(prev => 
-        prev.map(v => 
+      setVehicles(prev =>
+        prev.map(v =>
           v.id === vehicle.id ? { ...v, is_active: vehicle.is_active } : v
         )
       );
@@ -409,12 +419,12 @@ export default function Vehicles() {
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!vehicleToDelete) return;
-    
+
     try {
       const { error } = await supabase.from('vehicles').delete().eq('id', vehicleToDelete.id);
       if (error) throw error;
-      
-      toast({ 
+
+      toast({
         title: 'Vehicle deleted successfully',
         description: `${vehicleToDelete.brand_name} ${vehicleToDelete.model_name} has been removed`
       });
@@ -444,7 +454,7 @@ export default function Vehicles() {
     // Apply search filter (debounced)
     if (debouncedSearchQuery) {
       const query = debouncedSearchQuery.toLowerCase();
-      filtered = filtered.filter(vehicle => 
+      filtered = filtered.filter(vehicle =>
         vehicle.brand_name.toLowerCase().includes(query) ||
         vehicle.model_name.toLowerCase().includes(query) ||
         vehicle.variant_name.toLowerCase().includes(query)
@@ -458,7 +468,7 @@ export default function Vehicles() {
 
     // Apply status filter
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(vehicle => 
+      filtered = filtered.filter(vehicle =>
         statusFilter === 'active' ? vehicle.is_active : !vehicle.is_active
       );
     }
@@ -496,20 +506,24 @@ export default function Vehicles() {
 
   /* ---------------- STATS ---------------- */
   const stats = useMemo(() => {
-    const active = vehicles.filter(v => v.is_active).length;
-    const inactive = vehicles.filter(v => !v.is_active).length;
-    
-    const fuelTypeCounts = vehicles.reduce((acc, v) => {
-      acc[v.fuel_type] = (acc[v.fuel_type] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+    const fuelTypeCounts: Record<string, number> = {};
 
-    const avgMileage = vehicles.length > 0
-      ? vehicles.reduce((sum, v) => sum + v.mileage_km_per_unit, 0) / vehicles.length
-      : 0;
+    // Count vehicles by fuel type (including hybrid variants)
+    filteredAndSortedVehicles.forEach(v => {
+      const key = v.is_hybrid ? `${v.fuel_type} HYBRID` : v.fuel_type;
+      fuelTypeCounts[key] = (fuelTypeCounts[key] || 0) + 1;
+    });
 
-    return { active, inactive, fuelTypeCounts, avgMileage };
-  }, [vehicles]);
+    const totalMileage = filteredAndSortedVehicles.reduce((sum, v) => sum + v.mileage_km_per_unit, 0);
+    const avgMileage = filteredAndSortedVehicles.length > 0 ? totalMileage / filteredAndSortedVehicles.length : 0;
+
+    return {
+      active: filteredAndSortedVehicles.filter(v => v.is_active).length,
+      inactive: filteredAndSortedVehicles.filter(v => !v.is_active).length,
+      fuelTypeCounts,
+      avgMileage,
+    };
+  }, [filteredAndSortedVehicles]);
 
   /* ---------------- SORT HANDLER ---------------- */
   const handleSort = useCallback((field: SortField) => {
@@ -535,7 +549,7 @@ export default function Vehicles() {
     if (sortField !== field) {
       return <ArrowUpDown className="w-4 h-4 ml-1 inline opacity-30" />;
     }
-    return sortDirection === 'asc' 
+    return sortDirection === 'asc'
       ? <ArrowUp className="w-4 h-4 ml-1 inline" />
       : <ArrowDown className="w-4 h-4 ml-1 inline" />;
   };
@@ -635,7 +649,7 @@ export default function Vehicles() {
             <CardTitle className="text-2xl md:text-3xl">{vehicles.length}</CardTitle>
           </CardHeader>
         </Card>
-        
+
         <Card>
           <CardHeader className="pb-3">
             <CardDescription>Active / Inactive</CardDescription>
@@ -651,11 +665,13 @@ export default function Vehicles() {
           <CardHeader className="pb-3">
             <CardDescription>Fuel Types</CardDescription>
             <div className="flex flex-wrap gap-1 md:gap-2 mt-2">
-              {FUEL_TYPES.map(type => (
-                <Badge key={type} variant="outline" className="text-xs">
-                  {type}: {stats.fuelTypeCounts[type] || 0}
-                </Badge>
-              ))}
+              {Object.entries(stats.fuelTypeCounts)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([type, count]) => (
+                  <Badge key={type} variant="outline" className="text-xs">
+                    {type}: {count}
+                  </Badge>
+                ))}
             </div>
           </CardHeader>
         </Card>
@@ -688,8 +704,8 @@ export default function Vehicles() {
             <DialogHeader>
               <DialogTitle>{editingVehicle ? 'Edit Vehicle' : 'Add New Vehicle(s)'}</DialogTitle>
               <DialogDescription id="dialog-description">
-                {editingVehicle 
-                  ? 'Update vehicle information' 
+                {editingVehicle
+                  ? 'Update vehicle information'
                   : 'Enter vehicle details. You can add multiple variants at once by selecting different fuel types.'}
               </DialogDescription>
             </DialogHeader>
@@ -731,7 +747,7 @@ export default function Vehicles() {
                     </span>
                   )}
                 </div>
-                
+
                 {!editingVehicle && (
                   <p className="text-sm text-muted-foreground">
                     Select fuel types and enter details for each variant you want to add
@@ -739,11 +755,10 @@ export default function Vehicles() {
                 )}
 
                 {formData.variants.map((variant, index) => (
-                  <div 
-                    key={index} 
-                    className={`border rounded-lg p-4 space-y-3 transition-colors ${
-                      variant.enabled ? 'bg-background border-primary/30' : 'bg-muted/50 border-border'
-                    }`}
+                  <div
+                    key={index}
+                    className={`border rounded-lg p-4 space-y-3 transition-colors ${variant.enabled ? 'bg-background border-primary/30' : 'bg-muted/50 border-border'
+                      }`}
                   >
                     {/* Fuel Type Header with Checkbox (only for add mode) */}
                     {!editingVehicle && (
@@ -762,6 +777,27 @@ export default function Vehicles() {
 
                     {(editingVehicle || variant.enabled) && (
                       <>
+                        {/* Hybrid Checkbox - NEW */}
+                        <div className="flex items-center space-x-2 pb-3 pt-1">
+                          <Checkbox
+                            id={`is-hybrid-${index}`}
+                            checked={variant.is_hybrid}
+                            onCheckedChange={(checked) =>
+                              updateVariantField(index, 'is_hybrid', checked as boolean)
+                            }
+                            aria-label={`Mark ${variant.fuel_type} as hybrid`}
+                          />
+                          <Label
+                            htmlFor={`is-hybrid-${index}`}
+                            className="text-sm font-medium cursor-pointer flex items-center gap-2"
+                          >
+                            <span className="text-primary">🔋 Hybrid</span>
+                            <Badge variant="outline" className="text-xs font-normal">
+                              {variant.fuel_type} + Electric
+                            </Badge>
+                          </Label>
+                        </div>
+
                         {/* Variant Name */}
                         <div className="space-y-2">
                           <Label htmlFor={`variant-name-${index}`}>Variant Name *</Label>
@@ -795,7 +831,7 @@ export default function Vehicles() {
                               aria-label={`Mileage for ${variant.fuel_type} variant`}
                             />
                           </div>
-                          
+
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
                               <Label htmlFor={`maintenance-${index}`}>Maintenance * (₹/km)</Label>
@@ -841,9 +877,9 @@ export default function Vehicles() {
               </div>
 
               <DialogFooter>
-                <Button 
-                  type="button" 
-                  variant="outline" 
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={() => {
                     setDialogOpen(false);
                     resetForm();
@@ -852,8 +888,8 @@ export default function Vehicles() {
                 >
                   Cancel
                 </Button>
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   disabled={submitting || (!editingVehicle && formData.variants.filter(v => v.enabled).length === 0)}
                 >
                   {submitting ? 'Saving...' : editingVehicle ? 'Update Vehicle' : 'Add Vehicle(s)'}
@@ -1005,12 +1041,12 @@ export default function Vehicles() {
                 {hasActiveFilters && ` (filtered from ${vehicles.length} total)`}
               </CardDescription>
             </div>
-            
+
             {/* Items per page selector */}
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Show:</span>
-              <Select 
-                value={itemsPerPage.toString()} 
+              <Select
+                value={itemsPerPage.toString()}
                 onValueChange={(value) => setItemsPerPage(Number(value))}
               >
                 <SelectTrigger className="w-[80px]" aria-label="Items per page">
@@ -1032,7 +1068,7 @@ export default function Vehicles() {
               <Car className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
               <h3 className="text-lg font-semibold mb-2">No vehicles found</h3>
               <p className="text-muted-foreground mb-4">
-                {hasActiveFilters 
+                {hasActiveFilters
                   ? 'Try adjusting your filters to see more results'
                   : 'Add your first vehicle to get started'
                 }
@@ -1051,7 +1087,7 @@ export default function Vehicles() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead 
+                      <TableHead
                         className="cursor-pointer hover:bg-muted/50 select-none"
                         onClick={() => handleSort('brand_name')}
                         role="button"
@@ -1066,7 +1102,7 @@ export default function Vehicles() {
                       >
                         Brand <SortIcon field="brand_name" />
                       </TableHead>
-                      <TableHead 
+                      <TableHead
                         className="cursor-pointer hover:bg-muted/50 select-none"
                         onClick={() => handleSort('model_name')}
                         role="button"
@@ -1083,7 +1119,7 @@ export default function Vehicles() {
                       </TableHead>
                       <TableHead>Variant</TableHead>
                       <TableHead>Fuel</TableHead>
-                      <TableHead 
+                      <TableHead
                         className="cursor-pointer hover:bg-muted/50 select-none"
                         onClick={() => handleSort('mileage_km_per_unit')}
                         role="button"
@@ -1098,7 +1134,7 @@ export default function Vehicles() {
                       >
                         Mileage <SortIcon field="mileage_km_per_unit" />
                       </TableHead>
-                      <TableHead 
+                      <TableHead
                         className="cursor-pointer hover:bg-muted/50 select-none"
                         onClick={() => handleSort('maintenance_cost_per_km')}
                         role="button"
@@ -1124,7 +1160,7 @@ export default function Vehicles() {
                         <TableCell>{vehicle.model_name}</TableCell>
                         <TableCell className="text-muted-foreground">{vehicle.variant_name}</TableCell>
                         <TableCell>
-                          <Badge variant="outline">{vehicle.fuel_type}</Badge>
+                          <Badge variant="outline">{getFuelTypeBadgeText(vehicle)}</Badge>
                         </TableCell>
                         <TableCell>
                           {vehicle.mileage_km_per_unit} km/{vehicle.fuel_type === 'EV' ? 'kWh' : 'L'}
@@ -1167,7 +1203,7 @@ export default function Vehicles() {
                                     )}
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem 
+                                  <DropdownMenuItem
                                     onClick={() => handleDeleteClick(vehicle)}
                                     className="text-destructive focus:text-destructive"
                                   >
@@ -1226,7 +1262,7 @@ export default function Vehicles() {
                                   )}
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => handleDeleteClick(vehicle)}
                                   className="text-destructive focus:text-destructive"
                                 >
@@ -1238,11 +1274,11 @@ export default function Vehicles() {
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
-                      
+
                       <div className="grid grid-cols-2 gap-3 text-sm">
                         <div>
                           <span className="text-muted-foreground block mb-1">Fuel Type</span>
-                          <Badge variant="outline">{vehicle.fuel_type}</Badge>
+                          <Badge variant="outline">{getFuelTypeBadgeText(vehicle)}</Badge>
                         </div>
                         <div>
                           <span className="text-muted-foreground block mb-1">Status</span>
@@ -1272,7 +1308,7 @@ export default function Vehicles() {
                   <div className="text-sm text-muted-foreground" role="status" aria-live="polite">
                     Page {currentPage} of {totalPages}
                   </div>
-                  
+
                   <nav className="flex items-center gap-2" aria-label="Pagination navigation">
                     <Button
                       variant="outline"
@@ -1284,7 +1320,7 @@ export default function Vehicles() {
                       <ChevronLeft className="w-4 h-4 mr-1" />
                       <span className="hidden sm:inline">Previous</span>
                     </Button>
-                    
+
                     {/* Page Numbers */}
                     <div className="hidden sm:flex items-center gap-1">
                       {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -1298,7 +1334,7 @@ export default function Vehicles() {
                         } else {
                           pageNum = currentPage - 2 + i;
                         }
-                        
+
                         return (
                           <Button
                             key={pageNum}
@@ -1314,7 +1350,7 @@ export default function Vehicles() {
                         );
                       })}
                     </div>
-                    
+
                     <Button
                       variant="outline"
                       size="sm"
