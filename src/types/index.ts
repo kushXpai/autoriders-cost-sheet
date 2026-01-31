@@ -1,7 +1,7 @@
 // src/types/index.ts
 
 // User Types
-export type UserRole = 'SUPERADMIN' | 'ADMIN' | 'STAFF';
+export type UserRole = 'SUPERADMIN' | 'ADMIN' | 'REGIONAL_MANAGER' | 'MANAGER';
 
 export interface User {
   id: string;
@@ -9,6 +9,7 @@ export interface User {
   email: string;
   password?: string;
   role: UserRole;
+  reports_to: string | null; // NEW: References another user's ID (Regional Manager)
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -218,5 +219,7 @@ export interface AuthContextType {
   logout: () => void;
   isAdmin: boolean;
   isSuperAdmin: boolean;
+  isRegionalManager: boolean;
+  isManager: boolean;
   isAuthenticated: boolean;
 }

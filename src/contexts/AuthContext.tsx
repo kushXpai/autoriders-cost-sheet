@@ -10,6 +10,8 @@ interface AuthContextType {
   logout: () => void;
   isAdmin: boolean;
   isSuperAdmin: boolean;
+  isRegionalManager: boolean;
+  isManager: boolean;
   isAuthenticated: boolean;
 }
 
@@ -45,7 +47,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             id: data.session.user.id,
             full_name: data.session.user.email || '',
             email: data.session.user.email || '',
-            role: 'STAFF',                     // default role
+            role: 'MANAGER',                     // default role changed from STAFF to MANAGER
+            reports_to: null,                     // NEW: add reports_to field
             is_active: true,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
@@ -78,7 +81,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               id: session.user.id,
               full_name: session.user.email || '',
               email: session.user.email || '',
-              role: 'STAFF',
+              role: 'MANAGER',                 // default role changed from STAFF to MANAGER
+              reports_to: null,                 // NEW: add reports_to field
               is_active: true,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -123,11 +127,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Role helpers
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
   const isSuperAdmin = user?.role === 'SUPERADMIN';
+  const isRegionalManager = user?.role === 'REGIONAL_MANAGER';
+  const isManager = user?.role === 'MANAGER';
   const isAuthenticated = !!user;
 
   // Return loading state so UI waits before rendering
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAdmin, isSuperAdmin, isAuthenticated }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      login, 
+      logout, 
+      isAdmin, 
+      isSuperAdmin, 
+      isRegionalManager,
+      isManager,
+      isAuthenticated 
+    }}>
       {loading ? <div className="text-center py-12">Loading...</div> : children}
     </AuthContext.Provider>
   );

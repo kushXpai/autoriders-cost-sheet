@@ -8,11 +8,11 @@ import { formatCurrency } from '@/lib/calculations';
 import {
   FileText, Car, Clock, CheckCircle, XCircle, AlertCircle, Users, Shield,
   Settings, TrendingUp, Fuel, BarChart3, Activity, DollarSign, Calendar,
-  ArrowUpRight, ArrowDownRight, Sparkles, Plus, TrendingDown
+  ArrowUpRight, ArrowDownRight, Sparkles, Plus, TrendingDown, UserCog
 } from 'lucide-react';
 
 export default function Dashboard() {
-  const { user, isAdmin, isSuperAdmin } = useAuth();
+  const { user, isAdmin, isSuperAdmin, isRegionalManager, isManager } = useAuth();
   const navigate = useNavigate();
 
   const [costSheets, setCostSheets] = useState<any[]>([]);
@@ -33,6 +33,7 @@ export default function Dashboard() {
       try {
         let costSheetsQuery = supabase.from('cost_sheets').select('*');
 
+        // Managers and Regional Managers only see their own cost sheets
         if (!isAdmin) {
           costSheetsQuery = costSheetsQuery.eq('created_by', user?.id);
         }
@@ -144,9 +145,16 @@ export default function Dashboard() {
     inactiveVehicles: vehicles.filter(v => !v.is_active).length,
     totalUsers: users.length,
     activeUsers: users.filter(u => u.is_active).length,
-    staffCount: users.filter(u => u.role === 'STAFF').length,
+    managerCount: users.filter(u => u.role === 'MANAGER').length,
+    regionalManagerCount: users.filter(u => u.role === 'REGIONAL_MANAGER').length,
     adminCount: users.filter(u => u.role === 'ADMIN').length,
     superAdminCount: users.filter(u => u.role === 'SUPERADMIN').length,
+  };
+
+  // Regional Manager specific stats
+  const regionalManagerStats = {
+    reportingManagers: users.filter(u => u.role === 'MANAGER' && u.reports_to === user?.id).length,
+    activeReportingManagers: users.filter(u => u.role === 'MANAGER' && u.reports_to === user?.id && u.is_active).length,
   };
 
   const superAdminStats = {
@@ -163,13 +171,22 @@ export default function Dashboard() {
   const getRoleColor = () => {
     if (isSuperAdmin) return 'from-blue-600 to-blue-700';
     if (isAdmin) return 'from-blue-500 to-blue-600';
+    if (isRegionalManager) return 'from-purple-500 to-purple-600';
     return 'from-blue-400 to-blue-500';
   };
 
   const getRoleLabel = () => {
     if (isSuperAdmin) return 'Super Administrator';
     if (isAdmin) return 'Administrator';
+    if (isRegionalManager) return 'Regional Manager';
     return 'Manager';
+  };
+
+  const getRoleDescription = () => {
+    if (isSuperAdmin) return 'Monitor system performance, manage rates, and oversee all operations';
+    if (isAdmin) return 'Manage fleet operations, team members, and cost sheet approvals';
+    if (isRegionalManager) return 'Oversee your team of managers and track their performance';
+    return 'Track your cost sheets and manage vehicle assignments';
   };
 
   // Calculate today's activity
@@ -201,193 +218,216 @@ export default function Dashboard() {
             Welcome back, {user?.full_name ?? 'User'}
           </h1>
           <p className="text-white/90 text-sm">
-            {isSuperAdmin
-              ? 'Monitor system performance, manage rates, and oversee all operations'
-              : isAdmin
-                ? 'Manage fleet operations, team members, and cost sheet approvals'
-                : 'Track your cost sheets and manage vehicle assignments'}
+            {getRoleDescription()}
           </p>
         </div>
       </div>
 
-      {/* Main Grid Layout */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Left Column - Stats (2 columns) */}
+      {/* Main Grid - Different layouts for different roles */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column - Cost Sheet Stats (for all users) */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Primary Stats */}
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <BarChart3 className="w-4 h-4 text-primary" />
-              <h2 className="text-lg font-display font-bold">Overview</h2>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+          {/* Overview Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <CompactStatCard
+              title="Total Sheets"
+              value={stats.total}
+              subtitle="All time"
+              Icon={FileText}
+              onClick={() => navigate('/cost-sheets')}
+            />
+            <CompactStatCard
+              title="This Week"
+              value={thisWeekSheets.length}
+              subtitle={`${todaySheets.length} today`}
+              Icon={Calendar}
+              trend={thisWeekSheets.length > 0 ? 'up' : null}
+              onClick={() => navigate('/cost-sheets')}
+            />
+            <CompactStatCard
+              title="Approved"
+              value={stats.approved}
+              subtitle={formatCurrency(stats.totalValue)}
+              Icon={CheckCircle}
+              trend="up"
+              onClick={() => navigate('/cost-sheets?status=APPROVED')}
+            />
+            <CompactStatCard
+              title="Pending"
+              value={stats.pending}
+              subtitle="Awaiting review"
+              Icon={Clock}
+              trend={stats.pending > 0 ? 'up' : null}
+              onClick={() => navigate('/cost-sheets?status=PENDING_APPROVAL')}
+            />
+          </div>
+
+          {/* Admin Overview Stats - Only for Admins */}
+          {isAdmin && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <CompactStatCard
-                title="Total Sheets"
-                value={stats.total}
-                subtitle={`${stats.draft} drafts`}
-                Icon={FileText}
-                onClick={() => navigate('/cost-sheets')}
+                title="Total Users"
+                value={adminStats.totalUsers}
+                subtitle={`${adminStats.activeUsers} active`}
+                Icon={Users}
+                onClick={() => navigate('/users')}
               />
               <CompactStatCard
-                title="Pending"
-                value={stats.pending}
-                subtitle="Awaiting review"
-                Icon={Clock}
-                trend={stats.pending > 0 ? 'up' : 'neutral'}
-                onClick={() => navigate('/cost-sheets?status=PENDING_APPROVAL')}
+                title="Managers"
+                value={adminStats.managerCount}
+                subtitle="Total managers"
+                Icon={UserCog}
+                onClick={() => navigate('/users')}
               />
               <CompactStatCard
-                title="Approved"
-                value={stats.approved}
-                subtitle={formatCurrency(stats.totalValue)}
-                Icon={CheckCircle}
-                trend="up"
-                onClick={() => navigate('/cost-sheets?status=APPROVED')}
+                title="Regional Mgrs"
+                value={adminStats.regionalManagerCount}
+                subtitle="Total regional"
+                Icon={Shield}
+                onClick={() => navigate('/users')}
               />
               <CompactStatCard
                 title="Vehicles"
-                value={stats.activeVehicles}
-                subtitle={`${vehicles.length} total`}
+                value={adminStats.totalVehicles}
+                subtitle={`${stats.activeVehicles} active`}
                 Icon={Car}
                 onClick={() => navigate('/vehicles')}
               />
             </div>
-          </div>
-
-          {/* Admin Stats */}
-          {isAdmin && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <Users className="w-4 h-4 text-primary" />
-                <h2 className="text-lg font-display font-bold">Fleet & Team</h2>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-                <CompactStatCard
-                  title="Fleet"
-                  value={adminStats.totalVehicles}
-                  subtitle={`${adminStats.inactiveVehicles} inactive`}
-                  Icon={Car}
-                  onClick={() => navigate('/vehicles')}
-                />
-                <CompactStatCard
-                  title="Users"
-                  value={adminStats.totalUsers}
-                  subtitle={`${adminStats.activeUsers} active`}
-                  Icon={Users}
-                  onClick={() => navigate('/users')}
-                />
-                <CompactStatCard
-                  title="Staff"
-                  value={adminStats.staffCount}
-                  subtitle={`${adminStats.adminCount} admins`}
-                  Icon={Activity}
-                  onClick={() => navigate('/users')}
-                />
-                <CompactStatCard
-                  title="Rejected"
-                  value={stats.rejected}
-                  subtitle="Need revision"
-                  Icon={XCircle}
-                  trend={stats.rejected > 0 ? 'down' : 'neutral'}
-                  onClick={() => navigate('/cost-sheets?status=REJECTED')}
-                />
-              </div>
-            </div>
           )}
 
-          {/* SuperAdmin Stats */}
+          {/* Regional Manager Team Stats - Only for Regional Managers */}
+          {isRegionalManager && (
+            <Card className="shadow-md border-purple-200">
+              <CardHeader className="pb-3 border-b bg-purple-50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base font-display flex items-center gap-2">
+                      <UserCog className="w-5 h-5 text-purple-600" />
+                      Your Team
+                    </CardTitle>
+                    <CardDescription className="text-xs mt-1">
+                      Managers reporting to you
+                    </CardDescription>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-3xl font-bold text-purple-600">
+                      {regionalManagerStats.reportingManagers}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Total Managers
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">Active Managers</div>
+                        <div className="text-xs text-muted-foreground">Currently working</div>
+                      </div>
+                    </div>
+                    <div className="text-2xl font-bold text-green-600">
+                      {regionalManagerStats.activeReportingManagers}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+                        <Users className="w-5 h-5 text-slate-600" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">Inactive Managers</div>
+                        <div className="text-xs text-muted-foreground">Not currently active</div>
+                      </div>
+                    </div>
+                    <div className="text-2xl font-bold text-slate-600">
+                      {regionalManagerStats.reportingManagers - regionalManagerStats.activeReportingManagers}
+                    </div>
+                  </div>
+
+                  {regionalManagerStats.reportingManagers === 0 && (
+                    <div className="text-center py-6 text-muted-foreground">
+                      <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">No managers assigned yet</p>
+                      <p className="text-xs mt-1">Contact your administrator to assign managers to your team</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Super Admin System Configuration */}
           {isSuperAdmin && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <Settings className="w-4 h-4 text-primary" />
-                <h2 className="text-lg font-display font-bold">Financial Controls</h2>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-                <CompactStatCard
-                  title="Interest"
-                  value={`${superAdminStats.interestRate}%`}
-                  subtitle="Lending rate"
-                  Icon={TrendingUp}
-                  onClick={() => navigate('/interest-rate')}
-                />
-                <CompactStatCard
-                  title="Insurance"
-                  value={`${superAdminStats.insuranceRate}%`}
-                  subtitle="Coverage rate"
-                  Icon={Shield}
-                  onClick={() => navigate('/insurance-rate')}
-                />
-                <CompactStatCard
-                  title="Admin Fee"
-                  value={`${superAdminStats.adminChargePercent}%`}
-                  subtitle="Service charge"
-                  Icon={DollarSign}
-                  onClick={() => navigate('/admin-charges')}
-                />
-                <CompactStatCard
-                  title="Fuel Types"
-                  value={superAdminStats.fuelTypes}
-                  subtitle="Configurations"
-                  Icon={Fuel}
-                  onClick={() => navigate('/fuel-rates')}
-                />
-              </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <CompactStatCard
+                title="Interest Rate"
+                value={`${superAdminStats.interestRate}%`}
+                subtitle="Current rate"
+                Icon={TrendingUp}
+                onClick={() => navigate('/settings')}
+              />
+              <CompactStatCard
+                title="Insurance"
+                value={`${superAdminStats.insuranceRate}%`}
+                subtitle="Annual rate"
+                Icon={Shield}
+                onClick={() => navigate('/settings')}
+              />
+              <CompactStatCard
+                title="Admin Charge"
+                value={`${superAdminStats.adminChargePercent}%`}
+                subtitle="Commission"
+                Icon={DollarSign}
+                onClick={() => navigate('/settings')}
+              />
+              <CompactStatCard
+                title="Fuel Types"
+                value={superAdminStats.fuelTypes}
+                subtitle="Configured"
+                Icon={Fuel}
+                onClick={() => navigate('/settings')}
+              />
             </div>
           )}
 
-          {/* Recent Cost Sheets */}
+          {/* Recent Activity */}
           <Card className="shadow-md">
             <CardHeader className="pb-3 border-b bg-muted/30">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-primary" />
-                  <CardTitle className="text-base font-display">Recent Activity</CardTitle>
-                </div>
-                <button
-                  onClick={() => navigate('/cost-sheets')}
-                  className="text-xs text-primary hover:underline font-medium flex items-center gap-1"
-                >
-                  View All
-                  <ArrowUpRight className="w-3 h-3" />
-                </button>
-              </div>
+              <CardTitle className="text-base font-display">Recent Cost Sheets</CardTitle>
+              <CardDescription>Latest submissions and updates</CardDescription>
             </CardHeader>
             <CardContent className="pt-4">
               {recentSheets.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-3">
-                    <FileText className="w-8 h-8 text-muted-foreground" />
-                  </div>
-                  <h3 className="font-semibold text-sm mb-1">No cost sheets yet</h3>
-                  <p className="text-xs text-muted-foreground mb-3">Create your first cost sheet</p>
-                  <button
-                    onClick={() => navigate('/cost-sheets/new')}
-                    className="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity inline-flex items-center gap-1"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Create Sheet
-                  </button>
+                <div className="text-center py-12 text-muted-foreground">
+                  <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p className="text-sm">No cost sheets yet</p>
+                  <p className="text-xs mt-1">Create your first cost sheet to get started</p>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {recentSheets.map(sheet => (
                     <div
                       key={sheet.id}
-                      className="group flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/60 cursor-pointer transition-all duration-200"
                       onClick={() => navigate(`/cost-sheets/${sheet.id}`)}
+                      className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer group border border-transparent hover:border-primary/20"
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm truncate group-hover:text-primary transition-colors">
-                          {sheet.company_name}
-                        </p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <p className="text-xs font-medium text-primary">
-                            {formatCurrency(sheet.grand_total)}
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">
+                            {sheet.company_name}
                           </p>
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(sheet.created_at).toLocaleDateString()}
-                          </span>
                         </div>
+                        <p className="text-xs text-muted-foreground">
+                          {formatCurrency(sheet.grand_total)} • {new Date(sheet.created_at).toLocaleDateString()}
+                        </p>
                       </div>
                       <CompactStatusBadge status={sheet.status} />
                     </div>
@@ -396,53 +436,15 @@ export default function Dashboard() {
               )}
             </CardContent>
           </Card>
-
-          {/* Quick Activity Stats */}
-          <div className="grid gap-3 md:grid-cols-3">
-            <Card className="shadow-md">
-              <CardContent className="pt-4">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-muted-foreground">Today</span>
-                  <Calendar className="w-3 h-3 text-muted-foreground" />
-                </div>
-                <div className="text-2xl font-bold">{todaySheets.length}</div>
-                <p className="text-xs text-muted-foreground mt-0.5">Sheets created</p>
-              </CardContent>
-            </Card>
-            <Card className="shadow-md">
-              <CardContent className="pt-4">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-muted-foreground">This Week</span>
-                  <TrendingUp className="w-3 h-3 text-muted-foreground" />
-                </div>
-                <div className="text-2xl font-bold">{thisWeekSheets.length}</div>
-                <p className="text-xs text-muted-foreground mt-0.5">Sheets processed</p>
-              </CardContent>
-            </Card>
-            <Card className="shadow-md">
-              <CardContent className="pt-4">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-muted-foreground">Avg Value</span>
-                  <DollarSign className="w-3 h-3 text-muted-foreground" />
-                </div>
-                <div className="text-2xl font-bold">
-                  {stats.approved > 0 ? formatCurrency(stats.totalValue / stats.approved).replace('₹', '₹') : '₹0'}
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5">Per approved sheet</p>
-              </CardContent>
-            </Card>
-          </div>
         </div>
 
-        {/* Right Column - Status & Quick Actions */}
-        <div className="space-y-4">
+        {/* Right Column - Status & Actions */}
+        <div className="space-y-6">
           {/* Status Overview */}
           <Card className="shadow-md">
             <CardHeader className="pb-3 border-b bg-muted/30">
-              <div className="flex items-center gap-2">
-                <Activity className="w-4 h-4 text-primary" />
-                <CardTitle className="text-base font-display">Status Breakdown</CardTitle>
-              </div>
+              <CardTitle className="text-base font-display">Status Overview</CardTitle>
+              <CardDescription>By approval status</CardDescription>
             </CardHeader>
             <CardContent className="pt-4 space-y-4">
               <CompactStatusBar
@@ -480,46 +482,69 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Quick Actions */}
-          <Card className="shadow-md">
-            <CardHeader className="pb-3 border-b bg-muted/30">
-              <CardTitle className="text-base font-display">Quick Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4 space-y-2">
-              <button
-                onClick={() => navigate('/cost-sheets/new')}
-                className="w-full flex items-center gap-2 p-3 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity text-sm font-medium"
-              >
-                <Plus className="w-4 h-4" />
-                New Cost Sheet
-              </button>
-              <button
-                onClick={() => navigate('/cost-sheets?status=PENDING_APPROVAL')}
-                className="w-full flex items-center gap-2 p-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors text-sm font-medium"
-              >
-                <Clock className="w-4 h-4" />
-                Review Pending ({stats.pending})
-              </button>
-              {isAdmin && (
-                <>
-                  <button
-                    onClick={() => navigate('/vehicles')}
-                    className="w-full flex items-center gap-2 p-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors text-sm font-medium"
-                  >
-                    <Car className="w-4 h-4" />
-                    Manage Vehicles
-                  </button>
-                  <button
-                    onClick={() => navigate('/users')}
-                    className="w-full flex items-center gap-2 p-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors text-sm font-medium"
-                  >
-                    <Users className="w-4 h-4" />
-                    Manage Users
-                  </button>
-                </>
-              )}
-            </CardContent>
-          </Card>
+          {/* Quick Actions - Show for Managers and Regional Managers */}
+          {(isManager || isRegionalManager) && (
+            <Card className="shadow-md">
+              <CardHeader className="pb-3 border-b bg-muted/30">
+                <CardTitle className="text-base font-display">Quick Actions</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4 space-y-2">
+                <button
+                  onClick={() => navigate('/cost-sheets/new')}
+                  className="w-full flex items-center gap-2 p-3 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity text-sm font-medium"
+                >
+                  <Plus className="w-4 h-4" />
+                  New Cost Sheet
+                </button>
+                <button
+                  onClick={() => navigate('/cost-sheets?status=PENDING_APPROVAL')}
+                  className="w-full flex items-center gap-2 p-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors text-sm font-medium"
+                >
+                  <Clock className="w-4 h-4" />
+                  Review Pending ({stats.pending})
+                </button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Admin Quick Actions */}
+          {isAdmin && (
+            <Card className="shadow-md">
+              <CardHeader className="pb-3 border-b bg-muted/30">
+                <CardTitle className="text-base font-display">Quick Actions</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4 space-y-2">
+                <button
+                  onClick={() => navigate('/cost-sheets/new')}
+                  className="w-full flex items-center gap-2 p-3 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity text-sm font-medium"
+                >
+                  <Plus className="w-4 h-4" />
+                  New Cost Sheet
+                </button>
+                <button
+                  onClick={() => navigate('/cost-sheets?status=PENDING_APPROVAL')}
+                  className="w-full flex items-center gap-2 p-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors text-sm font-medium"
+                >
+                  <Clock className="w-4 h-4" />
+                  Review Pending ({stats.pending})
+                </button>
+                <button
+                  onClick={() => navigate('/vehicles')}
+                  className="w-full flex items-center gap-2 p-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors text-sm font-medium"
+                >
+                  <Car className="w-4 h-4" />
+                  Manage Vehicles
+                </button>
+                <button
+                  onClick={() => navigate('/users')}
+                  className="w-full flex items-center gap-2 p-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors text-sm font-medium"
+                >
+                  <Users className="w-4 h-4" />
+                  Manage Users
+                </button>
+              </CardContent>
+            </Card>
+          )}
 
           {/* System Health (for admins) */}
           {isAdmin && (
