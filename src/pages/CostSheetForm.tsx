@@ -1196,9 +1196,9 @@ export default function CostSheetForm() {
                   <div className="p-3 bg-muted rounded-lg font-medium">
                     {formatCurrency(calculations.fuel_cost)}
                   </div>
-                  {selectedVehicle && selectedCity && (
+                  {selectedVehicle && formData.city && (
                     <p className="text-xs text-muted-foreground">
-                      {formData.monthly_km.toFixed(0)} km ÷ {formData.mileage_per_liter || selectedVehicle.mileage_km_per_unit} km/{selectedVehicle.fuel_type === 'EV' ? 'kWh' : 'L'} @ {formatCurrency(fuelRate)}/{selectedVehicle.fuel_type === 'EV' ? 'kWh' : 'L'} in {selectedCity}
+                      {formData.monthly_km.toFixed(0)} km ÷ {formData.mileage_per_liter || selectedVehicle.mileage_km_per_unit} km/{selectedVehicle.fuel_type === 'EV' ? 'kWh' : 'L'} @ {formatCurrency(fuelRate)}/{selectedVehicle.fuel_type === 'EV' ? 'kWh' : 'L'} in {formData.city}
                     </p>
                   )}
                 </div>
