@@ -790,7 +790,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .select(
         `
         *,
-        created_by_user:users!cost_sheets_created_by_fkey(id, full_name, email),
+        created_by_user:users!cost_sheets_created_by_fkey(
+          id, 
+          full_name, 
+          email,
+          reports_to,
+          regional_manager:users!users_reports_to_fkey(id, full_name, email)
+        ),
         approved_by_user:users!cost_sheets_approved_by_fkey(id, full_name, email, role),
         vehicle:vehicles(brand_name, model_name, variant_name)
       `
@@ -808,17 +814,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let emailOptions: any;
 
     if (type === 'submission') {
-      // Submission email - TO: Admins
-      const recipients = [
-        settings.super_admin_email,
-        ...(settings.admin_emails || []),
-      ].filter((email) => email && typeof email === 'string' && email.includes('@'));
+      // Submission email - TO: Super Admin, CC: Admins + Regional Manager
+      const toEmail = settings.super_admin_email;
 
-      const uniqueRecipients = [...new Set(recipients)];
-
-      if (uniqueRecipients.length === 0) {
-        throw new Error('No valid admin emails configured');
+      if (!toEmail || !toEmail.includes('@')) {
+        throw new Error('Super admin email is invalid or missing');
       }
+
+      // Build CC list: admin_emails + regional manager
+      let ccEmails: string[] = [...(settings.admin_emails || [])];
+      
+      // Add regional manager email if exists
+      if (costSheet.created_by_user?.regional_manager?.email) {
+        ccEmails.push(costSheet.created_by_user.regional_manager.email);
+      }
+
+      // Remove duplicates and filter valid emails
+      ccEmails = [...new Set(ccEmails)].filter(
+        (email) =>
+          email &&
+          typeof email === 'string' &&
+          email.includes('@') &&
+          email !== toEmail
+      );
 
       const formattedDate = new Date(
         costSheet.submitted_at || costSheet.created_at
@@ -844,12 +862,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       emailOptions = {
         from: `Autoriders <${process.env.EMAIL_USER}>`,
-        to: uniqueRecipients.join(', '),
+        to: toEmail,
+        cc: ccEmails.length > 0 ? ccEmails.join(', ') : undefined,
         subject: `🚗 New Cost Sheet Submitted - ${costSheet.company_name}`,
         html,
       };
     } else if (type === 'approval') {
-      // Approval email - TO: Creator, CC: Other Admins
+      // Approval email - TO: Creator, CC: Admins + Regional Manager
       if (
         !costSheet.created_by_user.email ||
         !costSheet.created_by_user.email.includes('@')
@@ -857,10 +876,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         throw new Error('Creator email is invalid or missing');
       }
 
-      let ccEmails: string[] = [];
-      if (approverRole === 'ADMIN') ccEmails = [settings.super_admin_email];
-      else if (approverRole === 'SUPER_ADMIN') ccEmails = settings.admin_emails || [];
+      // Build CC list: all admin_emails + regional manager
+      let ccEmails: string[] = [...(settings.admin_emails || [])];
 
+      // Add regional manager email if exists
+      if (costSheet.created_by_user?.regional_manager?.email) {
+        ccEmails.push(costSheet.created_by_user.regional_manager.email);
+      }
+
+      // Remove duplicates and filter valid emails, exclude creator
       ccEmails = [...new Set(ccEmails)].filter(
         (email) =>
           email &&
@@ -901,7 +925,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         html,
       };
     } else if (type === 'rejection') {
-      // Rejection email - TO: Creator, CC: Other Admins
+      // Rejection email - TO: Creator, CC: Admins + Regional Manager
       if (
         !costSheet.created_by_user.email ||
         !costSheet.created_by_user.email.includes('@')
@@ -909,10 +933,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         throw new Error('Creator email is invalid or missing');
       }
 
-      let ccEmails: string[] = [];
-      if (approverRole === 'ADMIN') ccEmails = [settings.super_admin_email];
-      else if (approverRole === 'SUPER_ADMIN') ccEmails = settings.admin_emails || [];
+      // Build CC list: all admin_emails + regional manager
+      let ccEmails: string[] = [...(settings.admin_emails || [])];
 
+      // Add regional manager email if exists
+      if (costSheet.created_by_user?.regional_manager?.email) {
+        ccEmails.push(costSheet.created_by_user.regional_manager.email);
+      }
+
+      // Remove duplicates and filter valid emails, exclude creator
       ccEmails = [...new Set(ccEmails)].filter(
         (email) =>
           email &&
