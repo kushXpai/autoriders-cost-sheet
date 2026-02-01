@@ -78,7 +78,6 @@ export default function CostSheetForm() {
     permit_cost: 0,
   });
 
-  const [selectedCity, setSelectedCity] = useState('');
   const [cities, setCities] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -327,7 +326,7 @@ export default function CostSheetForm() {
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
-  }, [formData, selectedCity, saveToDatabase]);
+  }, [formData, saveToDatabase]);
 
   useEffect(() => {
     fetchCities();
@@ -348,12 +347,6 @@ export default function CostSheetForm() {
   }, [formData.vehicle_id, formData.city, vehicles]);
 
   useEffect(() => {
-    if (selectedCity && formData.city !== selectedCity) {
-      setFormData(prev => ({ ...prev, city: selectedCity }));
-    }
-  }, [selectedCity, formData.city]);
-
-  useEffect(() => {
     if (id && user) {
       fetchCostSheet(id);
     } else {
@@ -371,8 +364,9 @@ export default function CostSheetForm() {
       if (error) throw error;
       const cityList = (data || []).map(c => c.name);
       setCities(cityList);
-      if (cityList.length > 0) {
-        setSelectedCity(cityList[0]);
+      // Only set default city if formData.city is empty
+      if (cityList.length > 0 && !formData.city) {
+        setFormData(prev => ({ ...prev, city: cityList[0] }));
       }
     } catch (error: any) {
       console.error('Error fetching cities:', error);
@@ -468,11 +462,6 @@ export default function CostSheetForm() {
         const downPaymentPercent = data.down_payment_amount && exShowroomPrice > 0
           ? (data.down_payment_amount / exShowroomPrice) * 100
           : 0;
-
-        // ADDED: Set selectedCity when loading existing cost sheet
-        if (data.city) {
-          setSelectedCity(data.city);
-        }
 
         setFormData({
           company_name: data.company_name || '',
