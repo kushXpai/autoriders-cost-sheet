@@ -91,7 +91,6 @@ export default function UserManagement() {
       toast({ title: 'Failed to fetch users', variant: 'destructive' });
     } else {
       setUsers(data as User[]);
-      // Filter regional managers for quick access
       setRegionalManagers(data.filter(u => u.role === 'REGIONAL_MANAGER') as User[]);
     }
     setLoading(false);
