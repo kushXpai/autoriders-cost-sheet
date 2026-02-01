@@ -790,13 +790,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .select(
         `
         *,
-        created_by_user:users!cost_sheets_created_by_fkey(
-          id, 
-          full_name, 
-          email,
-          reports_to,
-          regional_manager:users!users_reports_to_fkey(id, full_name, email)
-        ),
+        created_by_user:users!cost_sheets_created_by_fkey(id, full_name, email, reports_to),
         approved_by_user:users!cost_sheets_approved_by_fkey(id, full_name, email, role),
         vehicle:vehicles(brand_name, model_name, variant_name)
       `
@@ -805,7 +799,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .single();
 
     if (costSheetError || !costSheet) {
+      console.error('Cost sheet fetch error:', costSheetError);
       throw new Error('Cost sheet not found');
+    }
+
+    // Fetch regional manager if reports_to exists
+    let regionalManager = null;
+    if (costSheet.created_by_user?.reports_to) {
+      const { data: rmData, error: rmError } = await supabase
+        .from('users')
+        .select('id, full_name, email')
+        .eq('id', costSheet.created_by_user.reports_to)
+        .single();
+      
+      if (!rmError && rmData) {
+        regionalManager = rmData;
+      }
+    }
+
+    // Attach regional manager to the created_by_user object
+    if (regionalManager) {
+      costSheet.created_by_user.regional_manager = regionalManager;
     }
 
     const appUrl = process.env.APP_URL || 'http://localhost:5173';
