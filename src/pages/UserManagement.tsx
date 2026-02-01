@@ -74,6 +74,12 @@ export default function UserManagement() {
   const [loading, setLoading] = useState(true);
   const [selectedManagerIds, setSelectedManagerIds] = useState<Set<string>>(new Set());
 
+  // Computed values for filtered lists
+  const leadersAndRegionalManagers = users.filter(u => 
+    ['SUPERADMIN', 'ADMIN', 'REGIONAL_MANAGER'].includes(u.role)
+  );
+  const managers = users.filter(u => u.role === 'MANAGER');
+
   // Fetch users from Supabase
   useEffect(() => {
     fetchUsers();
@@ -124,18 +130,51 @@ export default function UserManagement() {
     setDialogOpen(true);
   };
 
+  // Function to update password via API route
+  const updateUserPassword = async (userId: string, newPassword: string) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+      throw new Error('No active session');
+    }
+
+    const response = await fetch('/api/update-password', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ userId, newPassword }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to update password');
+    }
+
+    return result;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     try {
       if (editingUser) {
-        // Update password if provided
+        // Update password if provided using API route
         if (formData.password.trim()) {
-          const { error: passwordError } = await supabase.auth.admin.updateUserById(
-            editingUser.id,
-            { password: formData.password }
-          );
-          if (passwordError) throw passwordError;
+          try {
+            await updateUserPassword(editingUser.id, formData.password);
+            toast({ title: 'Password updated successfully' });
+          } catch (passwordError: any) {
+            console.error('Password update failed:', passwordError);
+            toast({ 
+              title: 'Password update failed', 
+              description: passwordError.message,
+              variant: 'destructive' 
+            });
+            // Continue with other updates even if password fails
+          }
         }
 
         // Update metadata (full_name, role, reports_to)
@@ -156,42 +195,45 @@ export default function UserManagement() {
         setUsers(users.map(u => u.id === editingUser.id ? data : u));
         if (data.role === 'REGIONAL_MANAGER') {
           setRegionalManagers(regionalManagers.map(rm => rm.id === editingUser.id ? data : rm));
+        } else if (editingUser.role === 'REGIONAL_MANAGER' && data.role !== 'REGIONAL_MANAGER') {
+          setRegionalManagers(regionalManagers.filter(rm => rm.id !== editingUser.id));
         }
+        
         toast({ title: 'User updated successfully' });
 
       } else {
-        // Create Auth user
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email: formData.email,
-          password: formData.password,
-        });
+        // Create Auth user with admin API
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+          throw new Error('No active session');
+        }
 
-        if (authError) throw authError;
-
-        const userId = authData.user?.id;
-        if (!userId) throw new Error('Failed to get user ID from Supabase Auth');
-
-        // Insert metadata into users table
-        const { data, error } = await supabase
-          .from('users')
-          .insert([{
-            id: userId,
-            full_name: formData.full_name,
+        // Create user via API
+        const createResponse = await fetch('/api/create-user', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
             email: formData.email,
+            password: formData.password,
+            full_name: formData.full_name,
             role: formData.role,
             reports_to: formData.role === 'MANAGER' ? formData.reports_to : null,
-            is_active: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          }])
-          .select()
-          .single();
+          }),
+        });
 
-        if (error) throw error;
+        const createResult = await createResponse.json();
 
-        setUsers([...users, data]);
-        if (data.role === 'REGIONAL_MANAGER') {
-          setRegionalManagers([...regionalManagers, data]);
+        if (!createResponse.ok) {
+          throw new Error(createResult.error || 'Failed to create user');
+        }
+
+        setUsers([...users, createResult.user]);
+        if (createResult.user.role === 'REGIONAL_MANAGER') {
+          setRegionalManagers([...regionalManagers, createResult.user]);
         }
         toast({ title: 'User added successfully' });
       }
@@ -210,41 +252,39 @@ export default function UserManagement() {
       return;
     }
 
-    const userToUpdate = users.find(u => u.id === id);
-    if (!userToUpdate) return;
+    const user = users.find(u => u.id === id);
+    if (!user) return;
 
-    const newStatus = !userToUpdate.is_active;
+    const { data, error } = await supabase
+      .from('users')
+      .update({ 
+        is_active: !user.is_active,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
 
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .update({ is_active: newStatus, updated_at: new Date().toISOString() })
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-
+    if (error) {
+      console.error(error);
+      toast({ title: 'Failed to toggle user status', variant: 'destructive' });
+    } else {
       setUsers(users.map(u => u.id === id ? data : u));
-      toast({ title: 'User status updated' });
-    } catch (err: any) {
-      console.error(err);
-      toast({ title: 'Error updating status', description: err.message, variant: 'destructive' });
+      if (data.role === 'REGIONAL_MANAGER') {
+        setRegionalManagers(regionalManagers.map(rm => rm.id === id ? data : rm));
+      }
+      toast({ title: `User ${data.is_active ? 'activated' : 'deactivated'} successfully` });
     }
   };
 
-  // Open assignment dialog for a regional manager
   const handleOpenAssignmentDialog = (regionalManager: User) => {
     setSelectedRegionalManager(regionalManager);
-    // Pre-select currently assigned managers
-    const assignedIds = users
-      .filter(u => u.role === 'MANAGER' && u.reports_to === regionalManager.id)
-      .map(u => u.id);
-    setSelectedManagerIds(new Set(assignedIds));
+    // Find all managers reporting to this regional manager
+    const assignedManagers = managers.filter(m => m.reports_to === regionalManager.id);
+    setSelectedManagerIds(new Set(assignedManagers.map(m => m.id)));
     setAssignmentDialogOpen(true);
   };
 
-  // Toggle manager selection
   const toggleManagerSelection = (managerId: string) => {
     const newSet = new Set(selectedManagerIds);
     if (newSet.has(managerId)) {
@@ -255,91 +295,82 @@ export default function UserManagement() {
     setSelectedManagerIds(newSet);
   };
 
-  // Save manager assignments
   const handleSaveAssignments = async () => {
     if (!selectedRegionalManager) return;
 
     try {
-      // Get all managers
-      const allManagers = users.filter(u => u.role === 'MANAGER');
+      // Get all managers currently assigned to this regional manager
+      const currentlyAssigned = managers.filter(m => m.reports_to === selectedRegionalManager.id);
       
-      // Determine which managers to assign/unassign
-      const managersToAssign = allManagers.filter(m => 
-        selectedManagerIds.has(m.id) && m.reports_to !== selectedRegionalManager.id
-      );
-      const managersToUnassign = allManagers.filter(m => 
-        !selectedManagerIds.has(m.id) && m.reports_to === selectedRegionalManager.id
-      );
-
-      // Assign managers
-      for (const manager of managersToAssign) {
-        const { error } = await supabase
-          .from('users')
-          .update({ 
-            reports_to: selectedRegionalManager.id,
-            updated_at: new Date().toISOString() 
-          })
-          .eq('id', manager.id);
-        
-        if (error) throw error;
-      }
+      // Managers to unassign (were assigned but no longer selected)
+      const toUnassign = currentlyAssigned.filter(m => !selectedManagerIds.has(m.id));
+      
+      // Managers to assign (selected but not currently assigned)
+      const toAssign = Array.from(selectedManagerIds).filter(id => {
+        const manager = managers.find(m => m.id === id);
+        return manager && manager.reports_to !== selectedRegionalManager.id;
+      });
 
       // Unassign managers
-      for (const manager of managersToUnassign) {
-        const { error } = await supabase
+      if (toUnassign.length > 0) {
+        const { error: unassignError } = await supabase
           .from('users')
           .update({ 
             reports_to: null,
-            updated_at: new Date().toISOString() 
+            updated_at: new Date().toISOString(),
           })
-          .eq('id', manager.id);
-        
-        if (error) throw error;
+          .in('id', toUnassign.map(m => m.id));
+
+        if (unassignError) throw unassignError;
       }
 
-      toast({ 
-        title: 'Assignments saved successfully',
-        description: `${managersToAssign.length} assigned, ${managersToUnassign.length} unassigned`
-      });
+      // Assign managers
+      if (toAssign.length > 0) {
+        const { error: assignError } = await supabase
+          .from('users')
+          .update({ 
+            reports_to: selectedRegionalManager.id,
+            updated_at: new Date().toISOString(),
+          })
+          .in('id', toAssign);
 
+        if (assignError) throw assignError;
+      }
+
+      // Refresh users list
+      await fetchUsers();
+      
+      toast({ title: 'Manager assignments updated successfully' });
       setAssignmentDialogOpen(false);
-      fetchUsers(); // Refresh the data
-    } catch (err: any) {
-      console.error(err);
+      setSelectedRegionalManager(null);
+      setSelectedManagerIds(new Set());
+    } catch (error: any) {
+      console.error('Assignment error:', error);
       toast({ 
-        title: 'Error saving assignments', 
-        description: err.message, 
+        title: 'Failed to update assignments', 
+        description: error.message,
         variant: 'destructive' 
       });
     }
   };
 
-  // Get managers assigned to a regional manager
-  const getAssignedManagersCount = (regionalManagerId: string): number => {
-    return users.filter(u => u.role === 'MANAGER' && u.reports_to === regionalManagerId).length;
+  const getAssignedManagersCount = (regionalManagerId: string) => {
+    return managers.filter(m => m.reports_to === regionalManagerId).length;
   };
 
-  // Get regional manager name by ID
-  const getRegionalManagerName = (id: string | null): string => {
-    if (!id) return 'Unassigned';
-    const rm = users.find(u => u.id === id);
+  const getRegionalManagerName = (regionalManagerId: string | null) => {
+    if (!regionalManagerId) return 'None';
+    const rm = regionalManagers.find(r => r.id === regionalManagerId);
     return rm ? rm.full_name : 'Unknown';
   };
 
-  if (loading) return <div className="text-center py-20 text-muted-foreground">Loading users...</div>;
-
-  // Separate users by role
-  const leadersAndRegionalManagers = users.filter(u => 
-    u.role === 'SUPERADMIN' || u.role === 'ADMIN' || u.role === 'REGIONAL_MANAGER'
-  );
-  const managers = users.filter(u => u.role === 'MANAGER');
-
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+    <div className="px-6 py-6 space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-display font-bold text-foreground">User Management</h1>
-          <p className="text-muted-foreground mt-1">Manage staff and admin users</p>
+          <h1 className="text-3xl font-bold">User Management</h1>
+          <p className="text-muted-foreground">Manage users, roles, and assignments</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
@@ -348,119 +379,112 @@ export default function UserManagement() {
               Add User
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>{editingUser ? 'Edit User' : 'Add New User'}</DialogTitle>
-              <DialogDescription>
-                {editingUser ? 'Update user details' : 'Add a new user to the system'}
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="full_name">Full Name</Label>
-                <Input
-                  id="full_name"
-                  value={formData.full_name}
-                  onChange={e => setFormData({ ...formData, full_name: e.target.value })}
-                  placeholder="John Doe"
-                  required
-                />
-              </div>
+          <DialogContent>
+            <form onSubmit={handleSubmit}>
+              <DialogHeader>
+                <DialogTitle>{editingUser ? 'Edit User' : 'Add New User'}</DialogTitle>
+                <DialogDescription>
+                  {editingUser ? 'Update user information' : 'Create a new user account'}
+                </DialogDescription>
+              </DialogHeader>
 
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={e => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="john@company.com"
-                  required
-                  disabled={!!editingUser} // Email cannot be changed after creation
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password">
-                  Password {editingUser && <span className="text-muted-foreground">(leave blank to keep current)</span>}
-                </Label>
-                <div className="relative">
+              <div className="space-y-4 my-4">
+                <div>
+                  <Label htmlFor="full_name">Full Name</Label>
                   <Input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    value={formData.password}
-                    onChange={e => setFormData({ ...formData, password: e.target.value })}
-                    placeholder={editingUser ? '••••••••' : 'Enter password'}
-                    required={!editingUser}
+                    id="full_name"
+                    value={formData.full_name}
+                    onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                    required
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="role">Role</Label>
-                <Select
-                  value={formData.role}
-                  onValueChange={(value: UserRole) => {
-                    setFormData({ 
-                      ...formData, 
-                      role: value,
-                      // Reset reports_to if not a manager
-                      reports_to: value === 'MANAGER' ? formData.reports_to : null
-                    });
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {USER_ROLES.map(role => (
-                      <SelectItem key={role} value={role}>{ROLE_LABELS[role]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                <div>
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    disabled={!!editingUser}
+                    required
+                  />
+                </div>
 
-              {/* Show Regional Manager selection only if role is MANAGER */}
-              {formData.role === 'MANAGER' && (
-                <div className="space-y-2">
-                  <Label htmlFor="reports_to">Reports To (Optional)</Label>
+                <div>
+                  <Label htmlFor="password">
+                    Password {editingUser && '(leave blank to keep current)'}
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      required={!editingUser}
+                      placeholder={editingUser ? 'Enter new password to change' : ''}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="role">Role</Label>
                   <Select
-                    value={formData.reports_to || 'none'}
-                    onValueChange={(value) => setFormData({ 
-                      ...formData, 
-                      reports_to: value === 'none' ? null : value 
-                    })}
+                    value={formData.role}
+                    onValueChange={(value) => setFormData({ ...formData, role: value as UserRole })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select Regional Manager" />
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Unassigned</SelectItem>
-                      {regionalManagers.map(rm => (
-                        <SelectItem key={rm.id} value={rm.id}>
-                          {rm.full_name}
+                      {USER_ROLES.map(role => (
+                        <SelectItem key={role} value={role}>
+                          {ROLE_LABELS[role]}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">
-                    You can also assign managers later from the "Assign Managers" option
-                  </p>
                 </div>
-              )}
+
+                {formData.role === 'MANAGER' && (
+                  <div>
+                    <Label htmlFor="reports_to">Reports To (Regional Manager)</Label>
+                    <Select
+                      value={formData.reports_to || 'none'}
+                      onValueChange={(value) => setFormData({ ...formData, reports_to: value === 'none' ? null : value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Unassigned</SelectItem>
+                        {regionalManagers.map(rm => (
+                          <SelectItem key={rm.id} value={rm.id}>
+                            {rm.full_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
 
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit">{editingUser ? 'Update User' : 'Add User'}</Button>
+                <Button type="submit">
+                  {editingUser ? 'Update' : 'Create'}
+                </Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -469,59 +493,55 @@ export default function UserManagement() {
 
       {/* Assignment Dialog */}
       <Dialog open={assignmentDialogOpen} onOpenChange={setAssignmentDialogOpen}>
-        <DialogContent className="sm:max-w-3xl max-h-[80vh]">
+        <DialogContent className="max-w-2xl max-h-[80vh]">
           <DialogHeader>
-            <DialogTitle>
-              Assign Managers to: {selectedRegionalManager?.full_name}
-            </DialogTitle>
+            <DialogTitle>Assign Managers to {selectedRegionalManager?.full_name}</DialogTitle>
             <DialogDescription>
-              Select managers who should report to this regional manager
+              Select which managers should report to this regional manager
             </DialogDescription>
           </DialogHeader>
-          
-          <div className="grid grid-cols-2 gap-6 py-4 overflow-y-auto max-h-[50vh]">
-            {/* Available Managers (Unassigned + Other assignments) */}
-            <div className="space-y-3">
-              <h3 className="font-semibold text-sm">All Managers ({managers.length})</h3>
-              <div className="space-y-2 border rounded-md p-3 bg-muted/20">
+
+          <div className="grid grid-cols-2 gap-4 my-4">
+            {/* Left: Available Managers */}
+            <div className="border rounded-lg p-4 space-y-2">
+              <h3 className="font-semibold mb-3">Available Managers ({managers.length})</h3>
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
                 {managers.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">No managers available</p>
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No managers available
+                  </p>
                 ) : (
                   managers.map(manager => (
-                    <div key={manager.id} className="flex items-start space-x-3 p-2 hover:bg-muted/50 rounded">
+                    <div key={manager.id} className="flex items-start space-x-2 p-2 hover:bg-accent rounded">
                       <Checkbox
                         id={`manager-${manager.id}`}
                         checked={selectedManagerIds.has(manager.id)}
                         onCheckedChange={() => toggleManagerSelection(manager.id)}
                       />
-                      <div className="flex-1">
-                        <label
-                          htmlFor={`manager-${manager.id}`}
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                        >
-                          {manager.full_name}
-                        </label>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {manager.email}
-                        </p>
+                      <label
+                        htmlFor={`manager-${manager.id}`}
+                        className="flex-1 cursor-pointer"
+                      >
+                        <p className="text-sm font-medium">{manager.full_name}</p>
+                        <p className="text-xs text-muted-foreground">{manager.email}</p>
                         {manager.reports_to && manager.reports_to !== selectedRegionalManager?.id && (
-                          <Badge variant="outline" className="mt-1 text-xs">
-                            Currently: {getRegionalManagerName(manager.reports_to)}
-                          </Badge>
+                          <p className="text-xs text-amber-600">
+                            Currently assigned to {getRegionalManagerName(manager.reports_to)}
+                          </p>
                         )}
-                      </div>
+                      </label>
                     </div>
                   ))
                 )}
               </div>
             </div>
 
-            {/* Currently Assigned Summary */}
-            <div className="space-y-3">
-              <h3 className="font-semibold text-sm">
+            {/* Right: Selected Managers */}
+            <div className="border rounded-lg p-4 space-y-2 bg-muted/30">
+              <h3 className="font-semibold mb-3">
                 Selected Managers ({selectedManagerIds.size})
               </h3>
-              <div className="space-y-2 border rounded-md p-3 bg-primary/5">
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
                 {selectedManagerIds.size === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">
                     No managers selected
