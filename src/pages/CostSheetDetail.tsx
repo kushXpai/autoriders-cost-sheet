@@ -40,6 +40,7 @@ export default function CostSheetDetail() {
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false);
   const [remarks, setRemarks] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
 
   // Fetch cost sheet, vehicles and users from Supabase
@@ -122,10 +123,18 @@ export default function CostSheetDetail() {
   const canSubmitForApproval = costSheet.status === 'DRAFT' && (costSheet.created_by === user?.id || isAdmin);
 
   const updateStatus = async (status: 'APPROVED' | 'REJECTED' | 'PENDING_APPROVAL') => {
+    // Prevent multiple submissions
+    if (isSubmitting) return;
+
     if (status === 'REJECTED' && !remarks.trim()) {
       toast({ title: 'Please provide remarks', variant: 'destructive' });
       return;
     }
+
+    // Set submitting state and close dialogs immediately
+    setIsSubmitting(true);
+    setApprovalDialogOpen(false);
+    setRejectionDialogOpen(false);
 
     const updates: any = { status, updated_at: new Date().toISOString() };
     if (status === 'APPROVED' || status === 'REJECTED') {
@@ -141,6 +150,7 @@ export default function CostSheetDetail() {
 
     if (error) {
       toast({ title: 'Failed to update status', variant: 'destructive' });
+      setIsSubmitting(false);
       return;
     }
 
@@ -202,36 +212,37 @@ export default function CostSheetDetail() {
           variant: 'default'
         });
       }
-    }
-
-    // Send submission email if submitting for approval from detail page
-    if (status === 'PENDING_APPROVAL') {
+    } else if (status === 'PENDING_APPROVAL') {
       try {
         const { sendCostSheetSubmittedEmail } = await import('../services/email');
-
         const emailResult = await sendCostSheetSubmittedEmail(id!);
 
         if (emailResult.success) {
           toast({
             title: 'Cost sheet submitted for approval',
-            description: 'Email notifications sent to admins'
+            description: 'Email notification sent to admins'
           });
         } else {
           toast({
             title: 'Cost sheet submitted for approval',
-            description: 'Note: Email notification failed to send'
+            description: 'Note: Email notification failed to send',
+            variant: 'default'
           });
         }
       } catch (emailError) {
         console.error('Failed to send email notification:', emailError);
         toast({
           title: 'Cost sheet submitted for approval',
-          description: 'Note: Email notification failed to send'
+          description: 'Note: Email notification failed to send',
+          variant: 'default'
         });
       }
     }
 
-    navigate('/cost-sheets');
+    // Refresh the page data
+    setCostSheet({ ...costSheet, ...updates });
+    setRemarks('');
+    setIsSubmitting(false);
   };
 
   return (
@@ -512,9 +523,12 @@ export default function CostSheetDetail() {
             <Textarea value={remarks} onChange={e => setRemarks(e.target.value)} />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setApprovalDialogOpen(false)}>Cancel</Button>
-            <Button onClick={() => updateStatus('APPROVED')}>
-              <CheckCircle className="w-4 h-4 mr-2" /> Approve
+            <Button variant="outline" onClick={() => setApprovalDialogOpen(false)} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button onClick={() => updateStatus('APPROVED')} disabled={isSubmitting}>
+              <CheckCircle className="w-4 h-4 mr-2" />
+              {isSubmitting ? 'Processing...' : 'Approve'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -533,9 +547,12 @@ export default function CostSheetDetail() {
             <Textarea value={remarks} onChange={e => setRemarks(e.target.value)} required />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectionDialogOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => updateStatus('REJECTED')}>
-              <XCircle className="w-4 h-4 mr-2" /> Reject
+            <Button variant="outline" onClick={() => setRejectionDialogOpen(false)} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => updateStatus('REJECTED')} disabled={isSubmitting}>
+              <XCircle className="w-4 h-4 mr-2" />
+              {isSubmitting ? 'Processing...' : 'Reject'}
             </Button>
           </DialogFooter>
         </DialogContent>
