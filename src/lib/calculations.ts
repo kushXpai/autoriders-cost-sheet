@@ -90,20 +90,27 @@ async function fetchActiveInsuranceRate(): Promise<number> {
   return data?.insurance_rate_percent ?? 3.5;
 }
 
-async function fetchFuelRate(fuel_type: string): Promise<number> {
+// UPDATED: Now accepts both fuel_type AND city
+async function fetchFuelRate(fuel_type: string, city: string): Promise<number> {
   const { data, error } = await supabase
     .from('fuel_rates')
     .select('*')
     .eq('fuel_type', fuel_type)
+    .eq('city', city)  // ADDED: Filter by city
     .order('effective_date', { ascending: false })
     .limit(1)
     .single();
 
   if (error) {
-    console.error('Error fetching fuel rate:', error.message);
+    console.error(`Error fetching fuel rate for ${fuel_type} in ${city}:`, error.message);
     return 0;
   }
   return data?.rate_per_unit ?? 0;
+}
+
+// ADDED: Export this function so it can be used in the form component
+export async function fetchFuelRateForCity(fuel_type: string, city: string): Promise<number> {
+  return fetchFuelRate(fuel_type, city);
 }
 
 // ----------------------
@@ -117,7 +124,10 @@ export async function calculateCostSheet(
   const interestRate = await fetchActiveInterestRate();
   const adminChargePercent = await fetchActiveAdminCharge();
   const insuranceRate = await fetchActiveInsuranceRate();
-  const fuelRate = vehicle ? await fetchFuelRate(vehicle.fuel_type) : 0;
+  // UPDATED: Pass both fuel_type and city to fetchFuelRate
+  const fuelRate = vehicle && formData.city 
+    ? await fetchFuelRate(vehicle.fuel_type, formData.city) 
+    : 0;
 
   // ----------------------
   // Tenure

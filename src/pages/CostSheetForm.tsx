@@ -339,19 +339,19 @@ export default function CostSheetForm() {
   }, []);
 
   useEffect(() => {
-    if (formData.vehicle_id && selectedCity) {
+    if (formData.vehicle_id && formData.city && vehicles.length > 0) {
       const vehicle = vehicles.find(v => v.id === formData.vehicle_id);
       if (vehicle) {
-        fetchFuelRate(vehicle.fuel_type, selectedCity);
+        fetchFuelRate(vehicle.fuel_type, formData.city);
       }
     }
-  }, [formData.vehicle_id, selectedCity, vehicles]);
+  }, [formData.vehicle_id, formData.city, vehicles]);
 
   useEffect(() => {
     if (selectedCity && formData.city !== selectedCity) {
       setFormData(prev => ({ ...prev, city: selectedCity }));
     }
-  }, [selectedCity]);
+  }, [selectedCity, formData.city]);
 
   useEffect(() => {
     if (id && user) {
@@ -468,6 +468,11 @@ export default function CostSheetForm() {
         const downPaymentPercent = data.down_payment_amount && exShowroomPrice > 0
           ? (data.down_payment_amount / exShowroomPrice) * 100
           : 0;
+
+        // ADDED: Set selectedCity when loading existing cost sheet
+        if (data.city) {
+          setSelectedCity(data.city);
+        }
 
         setFormData({
           company_name: data.company_name || '',
