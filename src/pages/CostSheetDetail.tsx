@@ -374,7 +374,15 @@ export default function CostSheetDetail() {
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 md:grid-cols-1">
-            <DetailRow label="Vehicle Cost" value={formatCurrency(costSheet.on_road_price)} />
+            {isAdmin && (
+              <>
+                <DetailRow label="Ex-Showroom Price" value={formatCurrency(costSheet.ex_showroom_price)} />
+                <DetailRow label="Discount" value={`- ${formatCurrency(costSheet.discount)}`} className="text-green-600" />
+                <DetailRow label="Discounted Price" value={formatCurrency(costSheet.discounted_price)} className="text-blue-600 font-semibold" />
+                <Separator className="my-2" />
+              </>
+            )}
+            <DetailRow label="Vehicle Cost (On-Road)" value={formatCurrency(costSheet.on_road_price)} />
             {isAdmin && (
               <>
                 <DetailRow label="Down Payment %" value={`${costSheet.down_payment_percent.toFixed(1)}%`} />
@@ -562,11 +570,11 @@ export default function CostSheetDetail() {
 }
 
 
-function DetailRow({ label, value }: { label: string; value: string }) {
+function DetailRow({ label, value, className }: { label: string; value: string; className?: string }) {
   return (
     <div className="flex justify-between py-2">
       <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium">{value}</span>
+      <span className={`font-medium ${className || ''}`}>{value}</span>
     </div>
   );
 }

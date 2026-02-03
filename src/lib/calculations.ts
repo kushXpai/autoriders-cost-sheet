@@ -135,28 +135,33 @@ export async function calculateCostSheet(
   const tenure_months = formData.tenure_years * 12;
 
   // ----------------------
-  // Insurance & On-Road Price (CHANGED)
+  // Discount & Discounted Price
   // ----------------------
-  // Insurance calculated on ex-showroom price (annual, then converted to monthly for subtotal_a)
+  const discounted_price = formData.ex_showroom_price - formData.discount;
+
+  // ----------------------
+  // Insurance & On-Road Price
+  // ----------------------
+  // Insurance calculated on ORIGINAL ex-showroom price (not discounted)
   const insurance_amount_annual =
     formData.ex_showroom_price * (insuranceRate / 100);
 
   const insurance_amount_monthly = insurance_amount_annual / 12;
   const registration_monthly = formData.registration_charges / 12;
 
-  // On-road price = ex-showroom + annual insurance + registration
+  // On-road price = discounted price + annual insurance + registration
   const on_road_price =
-    formData.ex_showroom_price +
+    discounted_price +
     insurance_amount_annual +
     formData.registration_charges;
 
   // ----------------------
-  // Financing (CHANGED - now based on on_road_price)
+  // Financing (CHANGED - now based on discounted_price)
   // ----------------------
   const down_payment_amount =
-    formData.ex_showroom_price * (formData.down_payment_percent / 100);
+    discounted_price * (formData.down_payment_percent / 100);
 
-  const loan_amount = formData.ex_showroom_price - down_payment_amount;
+  const loan_amount = discounted_price - down_payment_amount;
 
   const emi_amount = calculateEMI(
     loan_amount,
@@ -216,6 +221,7 @@ export async function calculateCostSheet(
   return {
     tenure_months,
 
+    discounted_price,
     insurance_amount_monthly,
     registration_monthly,
     on_road_price,

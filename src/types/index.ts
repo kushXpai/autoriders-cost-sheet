@@ -106,6 +106,8 @@ export interface CostSheet {
   tenure_months: number;
 
   ex_showroom_price: number;
+  discount: number;
+  discounted_price: number;
   insurance_amount_monthly: number;
   registration_monthly: number;
   registration_charges: number;
@@ -165,6 +167,7 @@ export interface CostSheetFormData {
   tenure_years: number;
 
   ex_showroom_price: number;
+  discount: number;
 
   down_payment_percent: number;
 
@@ -189,6 +192,7 @@ export interface CostSheetFormData {
 export interface CalculatedFields {
   tenure_months: number;
 
+  discounted_price: number;
   insurance_amount_monthly: number;
   registration_monthly: number;
   on_road_price: number;
