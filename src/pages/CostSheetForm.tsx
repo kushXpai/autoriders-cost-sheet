@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
@@ -23,7 +24,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Separator } from '@/components/ui/separator';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { PlusCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/supabase/client';
 import { calculateCostSheet, formatCurrency } from '@/lib/calculations';
@@ -110,7 +120,62 @@ export default function CostSheetForm() {
     autoSavedDraftIdRef.current = autoSavedDraftId;
   }, [autoSavedDraftId]);
 
-  // Block navigation if unsaved changes
+  // Quick-add vehicle state
+  const [quickAddVehicleOpen, setQuickAddVehicleOpen] = useState(false);
+  const [quickAddSubmitting, setQuickAddSubmitting] = useState(false);
+  const [quickAddForm, setQuickAddForm] = useState({
+    brand_name: '',
+    model_name: '',
+    variant_name: '',
+    fuel_type: 'PETROL' as 'PETROL' | 'DIESEL' | 'EV',
+    is_hybrid: false,
+    mileage_km_per_unit: '',
+    maintenance_cost_per_km: '',
+  });
+
+  const handleQuickAddVehicle = async () => {
+    if (!quickAddForm.brand_name || !quickAddForm.model_name || !quickAddForm.variant_name ||
+      !quickAddForm.mileage_km_per_unit || !quickAddForm.maintenance_cost_per_km) {
+      toast({ title: 'Please fill all required fields', variant: 'destructive' });
+      return;
+    }
+    setQuickAddSubmitting(true);
+    try {
+      const { data, error } = await supabase
+        .from('vehicles')
+        .insert({
+          brand_name: quickAddForm.brand_name.trim(),
+          model_name: quickAddForm.model_name.trim(),
+          variant_name: quickAddForm.variant_name.trim(),
+          fuel_type: quickAddForm.fuel_type,
+          is_hybrid: quickAddForm.is_hybrid,
+          mileage_km_per_unit: parseFloat(quickAddForm.mileage_km_per_unit),
+          maintenance_cost_per_km: parseFloat(quickAddForm.maintenance_cost_per_km),
+          is_active: true,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Add to vehicles list and auto-select it
+      setVehicles(prev => [...prev, data].sort((a, b) => a.brand_name.localeCompare(b.brand_name)));
+      setFormData(prev => ({
+        ...prev,
+        vehicle_id: data.id,
+        mileage_per_liter: data.mileage_km_per_unit,
+        maintenance_cost_per_km: data.maintenance_cost_per_km,
+      }));
+
+      toast({ title: 'Vehicle added!', description: `${data.brand_name} ${data.model_name} has been created and selected.` });
+      setQuickAddVehicleOpen(false);
+      setQuickAddForm({ brand_name: '', model_name: '', variant_name: '', fuel_type: 'PETROL', is_hybrid: false, mileage_km_per_unit: '', maintenance_cost_per_km: '' });
+    } catch (err: any) {
+      toast({ title: 'Failed to add vehicle', description: err.message, variant: 'destructive' });
+    } finally {
+      setQuickAddSubmitting(false);
+    }
+  };
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
       hasUnsavedChanges &&
@@ -918,6 +983,14 @@ export default function CostSheetForm() {
                 </SelectContent>
               </Select>
               {errors.vehicle_id && <p className="text-xs text-destructive">{errors.vehicle_id}</p>}
+              <button
+                type="button"
+                onClick={() => setQuickAddVehicleOpen(true)}
+                className="flex items-center gap-1.5 text-xs text-primary hover:underline mt-1"
+              >
+                <PlusCircle className="w-3.5 h-3.5" />
+                Can't find your vehicle? Add it here
+              </button>
             </div>
 
             <div className="space-y-2">
@@ -1381,6 +1454,122 @@ export default function CostSheetForm() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Quick Add Vehicle Dialog */}
+      <Dialog open={quickAddVehicleOpen} onOpenChange={setQuickAddVehicleOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PlusCircle className="w-5 h-5 text-primary" />
+              Add New Vehicle
+            </DialogTitle>
+            <DialogDescription>
+              Quickly add a vehicle to the system. It will be automatically selected in your cost sheet.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Brand & Model */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Brand Name *</Label>
+                <Input
+                  placeholder="e.g. Toyota"
+                  value={quickAddForm.brand_name}
+                  onChange={(e) => setQuickAddForm(prev => ({ ...prev, brand_name: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Model Name *</Label>
+                <Input
+                  placeholder="e.g. Innova Crysta"
+                  value={quickAddForm.model_name}
+                  onChange={(e) => setQuickAddForm(prev => ({ ...prev, model_name: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            {/* Variant Name */}
+            <div className="space-y-2">
+              <Label>Variant Name *</Label>
+              <Input
+                placeholder="e.g. GX 2.4 MT"
+                value={quickAddForm.variant_name}
+                onChange={(e) => setQuickAddForm(prev => ({ ...prev, variant_name: e.target.value }))}
+              />
+            </div>
+
+            {/* Fuel Type */}
+            <div className="space-y-2">
+              <Label>Fuel Type *</Label>
+              <Select
+                value={quickAddForm.fuel_type}
+                onValueChange={(v) => setQuickAddForm(prev => ({ ...prev, fuel_type: v as 'PETROL' | 'DIESEL' | 'EV' }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PETROL">Petrol</SelectItem>
+                  <SelectItem value="DIESEL">Diesel</SelectItem>
+                  <SelectItem value="EV">EV</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Hybrid */}
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="quick-add-hybrid"
+                checked={quickAddForm.is_hybrid}
+                onCheckedChange={(checked) => setQuickAddForm(prev => ({ ...prev, is_hybrid: !!checked }))}
+              />
+              <Label htmlFor="quick-add-hybrid" className="cursor-pointer">
+                🔋 Hybrid ({quickAddForm.fuel_type} + Electric)
+              </Label>
+            </div>
+
+            {/* Mileage & Maintenance */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Mileage * (km/{quickAddForm.fuel_type === 'EV' ? 'kWh' : 'L'})</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  min="0.1"
+                  placeholder="e.g. 12.5"
+                  value={quickAddForm.mileage_km_per_unit}
+                  onChange={(e) => setQuickAddForm(prev => ({ ...prev, mileage_km_per_unit: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Maintenance * (₹/km)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="e.g. 2.50"
+                  value={quickAddForm.maintenance_cost_per_km}
+                  onChange={(e) => setQuickAddForm(prev => ({ ...prev, maintenance_cost_per_km: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setQuickAddVehicleOpen(false)}
+              disabled={quickAddSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleQuickAddVehicle} disabled={quickAddSubmitting}>
+              {quickAddSubmitting ? 'Adding...' : 'Add & Select Vehicle'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Navigation Blocker Dialog */}
       {blocker.state === 'blocked' && (
