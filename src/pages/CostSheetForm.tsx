@@ -751,14 +751,7 @@ export default function CostSheetForm() {
         });
       }
 
-      // Navigate to detail page if editing, list if creating
-      if (isEditing && id) {
-        navigate(`/cost-sheets/${id}`);
-      } else if (result.data?.id) {
-        navigate(`/cost-sheets/${result.data.id}`);
-      } else {
-        navigate('/cost-sheets');
-      }
+      navigate('/cost-sheets');
     } catch (error: any) {
       console.error('Error saving cost sheet:', error);
       toast({
@@ -834,7 +827,7 @@ export default function CostSheetForm() {
               Editing will reset the cost sheet to Draft status. Submit for approval after saving.
             </p>
           )}
-          <div className="flex gap-3 justify-end">
+          <div className="flex gap-3 justify-end flex-wrap">
             {!isAdmin && (
               <Button variant="outline" onClick={() => navigate('/cost-sheets')} disabled={loading}>
                 Cancel
@@ -881,7 +874,7 @@ export default function CostSheetForm() {
             <CardTitle className="text-lg">Basic Information</CardTitle>
             <CardDescription>Company, location, and vehicle details</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-4">
+          <CardContent className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
             <div className="space-y-2">
               <Label htmlFor="company">Company Name *</Label>
               <Input
@@ -984,9 +977,9 @@ export default function CostSheetForm() {
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Financing Details</CardTitle>
-            <CardDescription>Based on discounted price</CardDescription>
+            <CardDescription>Based on ex-showroom price only</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-4">
+          <CardContent className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
             {isAdmin && (
               <div className="space-y-2">
                 <Label htmlFor="down_payment">Down Payment (%)</Label>
@@ -1031,7 +1024,7 @@ export default function CostSheetForm() {
           <CardHeader>
             <CardTitle className="text-lg">Insurance, Registration & On-Road Price</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-4">
+          <CardContent className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
                 Annual Insurance
@@ -1085,7 +1078,7 @@ export default function CostSheetForm() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
                 <Label className="flex items-center gap-2">
                   Monthly EMI
                   <Lock className="w-3 h-3 text-muted-foreground" />
@@ -1107,11 +1100,11 @@ export default function CostSheetForm() {
             <Separator />
 
             <div className="space-y-3">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
                 <span className="text-sm text-muted-foreground">Monthly Insurance ({insuranceRate}% of ex-showroom ÷ 12)</span>
                 <span className="font-medium">{formatCurrency(calculations.insurance_amount_monthly)}</span>
               </div>
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
                 <span className="text-sm text-muted-foreground">Monthly Registration (₹{formatCurrency(formData.registration_charges)} ÷ 12)</span>
                 <span className="font-medium">{formatCurrency(calculations.registration_monthly)}</span>
               </div>
@@ -1139,7 +1132,7 @@ export default function CostSheetForm() {
             {/* Vehicle Specifications - Editable */}
             <div>
               <h4 className="font-medium mb-3 text-muted-foreground">Vehicle Specifications</h4>
-              <div className="grid gap-4 md:grid-cols-4">
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
                 <div className="space-y-2">
                   <Label htmlFor="mileage_per_liter">
                     Mileage (km per {selectedVehicle?.fuel_type === 'EV' ? 'kWh' : 'Liter'})
@@ -1198,7 +1191,7 @@ export default function CostSheetForm() {
             {/* Usage & Fuel */}
             <div>
               <h4 className="font-medium mb-3 text-muted-foreground">Usage & Fuel</h4>
-              <div className="grid gap-4 md:grid-cols-4">
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
                 <div className="space-y-2">
                   <Label htmlFor="monthly_km">Monthly KM *</Label>
                   <Input
@@ -1243,7 +1236,7 @@ export default function CostSheetForm() {
             {/* Driver Costs */}
             <div>
               <h4 className="font-medium mb-3 text-muted-foreground">Driver Costs</h4>
-              <div className="grid gap-4 md:grid-cols-4">
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
                 <div className="space-y-2">
                   <Label htmlFor="drivers">Number of Drivers</Label>
                   <Input
@@ -1281,7 +1274,7 @@ export default function CostSheetForm() {
             {/* Maintenance Cost */}
             <div>
               <h4 className="font-medium mb-3 text-muted-foreground">Maintenance</h4>
-              <div className="grid gap-4 md:grid-cols-4">
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
                     Monthly Maintenance Cost
@@ -1302,7 +1295,7 @@ export default function CostSheetForm() {
             {/* Other Costs */}
             <div>
               <h4 className="font-medium mb-3 text-muted-foreground">Other Monthly Costs</h4>
-              <div className="grid gap-4 md:grid-cols-4">
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
                 <div className="space-y-2">
                   <Label htmlFor="parking">Parking Charges (₹)</Label>
                   <Input
@@ -1361,7 +1354,7 @@ export default function CostSheetForm() {
             <CardTitle className="text-lg">Summary & Admin Charges</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Subtotal A</span>

@@ -248,14 +248,14 @@ export default function CostSheetDetail() {
   return (
     <div className="space-y-6 animate-fade-in max-w-4xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => navigate('/cost-sheets')}>
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
-            <h1 className="text-2xl font-display font-bold text-foreground">{costSheet.company_name}</h1>
-            <div className="flex items-center gap-3 mt-1">
+            <h1 className="text-xl sm:text-2xl font-display font-bold text-foreground">{costSheet.company_name}</h1>
+            <div className="flex items-center gap-3 mt-1 flex-wrap">
               <Badge className={config.className}>
                 <StatusIcon className="w-3 h-3 mr-1" />
                 {config.label}
@@ -267,28 +267,28 @@ export default function CostSheetDetail() {
           </div>
         </div>
 
-
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap justify-start sm:justify-end">
           {costSheet.status === 'APPROVED' && (
-            <Button variant="outline" onClick={() => generateCostSheetPDF(costSheet, vehicle, creator?.full_name || 'Unknown')}>
+            <Button variant="outline" size="sm" onClick={() => generateCostSheetPDF(costSheet, vehicle, creator?.full_name || 'Unknown')}>
               <Download className="w-4 h-4 mr-2" /> Download PDF
             </Button>
           )}
           {canEdit && (
             <Link to={`/cost-sheets/${id}/edit`}>
-              <Button variant="outline">
+              <Button variant="outline" size="sm">
                 <Pencil className="w-4 h-4 mr-2" /> Edit
               </Button>
             </Link>
           )}
           {canSubmitForApproval && (
-            <Button onClick={() => updateStatus('PENDING_APPROVAL')}>
+            <Button size="sm" onClick={() => updateStatus('PENDING_APPROVAL')}>
               <Send className="w-4 h-4 mr-2" /> Submit for Approval
             </Button>
           )}
           {canApprove && (
             <>
               <Button
+                size="sm"
                 variant="destructive"
                 onClick={() => setRejectionDialogOpen(true)}
                 className="bg-red-600 hover:bg-red-700 text-white"
@@ -296,6 +296,7 @@ export default function CostSheetDetail() {
                 <XCircle className="w-4 h-4 mr-2" /> Reject
               </Button>
               <Button
+                size="sm"
                 onClick={() => setApprovalDialogOpen(true)}
                 className="bg-green-600 hover:bg-green-700 text-white"
               >
@@ -308,7 +309,7 @@ export default function CostSheetDetail() {
 
 
       {/* Metadata Cards */}
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
         <Card>
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
@@ -475,7 +476,7 @@ export default function CostSheetDetail() {
           <CardTitle className="text-lg">Summary & Admin Charges</CardTitle>
         </CardHeader>
         <CardContent className="pt-6">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
             <div className="space-y-3">
               <DetailRow label="Subtotal A" value={formatCurrency(costSheet.subtotal_a)} />
               <DetailRow label="Subtotal B" value={formatCurrency(costSheet.subtotal_b)} />
