@@ -308,7 +308,7 @@ export default function CostSheetDetail() {
 
 
       {/* Metadata Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
         <Card>
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
@@ -502,7 +502,7 @@ export default function CostSheetDetail() {
           </CardHeader>
           <CardContent className="space-y-3">
             <DetailRow label="Status" value={config.label} />
-            <DetailRow label="Approved By" value={approver?.full_name || 'Unknown'} />
+            <DetailRow label={costSheet.status === 'REJECTED' ? 'Rejected By' : 'Approved By'} value={approver?.full_name || 'Unknown'} />
             <DetailRow label="Date" value={costSheet.approved_at ? new Date(costSheet.approved_at).toLocaleString() : 'N/A'} />
             {costSheet.approval_remarks && (
               <div>

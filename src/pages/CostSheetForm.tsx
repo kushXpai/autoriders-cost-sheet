@@ -751,7 +751,14 @@ export default function CostSheetForm() {
         });
       }
 
-      navigate('/cost-sheets');
+      // Navigate to detail page if editing, list if creating
+      if (isEditing && id) {
+        navigate(`/cost-sheets/${id}`);
+      } else if (result.data?.id) {
+        navigate(`/cost-sheets/${result.data.id}`);
+      } else {
+        navigate('/cost-sheets');
+      }
     } catch (error: any) {
       console.error('Error saving cost sheet:', error);
       toast({
@@ -977,7 +984,7 @@ export default function CostSheetForm() {
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Financing Details</CardTitle>
-            <CardDescription>Based on ex-showroom price only</CardDescription>
+            <CardDescription>Based on discounted price</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-4">
             {isAdmin && (

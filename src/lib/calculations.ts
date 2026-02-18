@@ -177,7 +177,10 @@ export async function calculateCostSheet(
   // ----------------------
   // Fuel
   // ----------------------
-  const mileage = vehicle?.mileage_km_per_unit ?? 25;
+  // Use formData override if provided, otherwise fall back to vehicle default
+  const mileage = (formData.mileage_per_liter && formData.mileage_per_liter > 0)
+    ? formData.mileage_per_liter
+    : (vehicle?.mileage_km_per_unit ?? 25);
 
   const fuel_cost =
     (formData.monthly_km / mileage) * fuelRate;
@@ -189,10 +192,14 @@ export async function calculateCostSheet(
     formData.drivers_count * formData.driver_salary_per_driver;
 
   // ----------------------
-  // Maintenance (AUTO from vehicle)
+  // Maintenance (use formData override if provided, otherwise AUTO from vehicle)
   // ----------------------
+  const maintenance_cost_per_km = (formData.maintenance_cost_per_km && formData.maintenance_cost_per_km > 0)
+    ? formData.maintenance_cost_per_km
+    : (vehicle?.maintenance_cost_per_km ?? 0);
+
   const maintenance_cost =
-    (vehicle?.maintenance_cost_per_km ?? 0) * formData.monthly_km;
+    maintenance_cost_per_km * formData.monthly_km;
 
   // ----------------------
   // Subtotal B
