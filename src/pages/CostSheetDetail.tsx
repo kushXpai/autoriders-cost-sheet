@@ -383,10 +383,12 @@ export default function CostSheetDetail() {
               </>
             )}
             <DetailRow label="Vehicle Cost (On-Road)" value={formatCurrency(costSheet.on_road_price)} />
+            <Separator className="my-2" />
             {isAdmin && (
               <>
                 <DetailRow label="Down Payment %" value={`${costSheet.down_payment_percent.toFixed(1)}%`} />
                 <DetailRow label="Down Payment Amount" value={formatCurrency(costSheet.down_payment_amount)} />
+                <Separator className="my-2" />
               </>
             )}
             <DetailRow label="Loan Amount" value={formatCurrency(costSheet.loan_amount)} />
