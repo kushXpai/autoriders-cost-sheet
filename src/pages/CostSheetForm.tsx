@@ -468,10 +468,7 @@ export default function CostSheetForm() {
         setOriginalCreatedBy(data.created_by);
         setOriginalStatus(data.status);
 
-        const exShowroomPrice = data.ex_showroom_price || 1;
-        const downPaymentPercent = data.down_payment_amount && exShowroomPrice > 0
-          ? (data.down_payment_amount / exShowroomPrice) * 100
-          : 0;
+        const downPaymentPercent = isNaN(data.down_payment_percent) ? 0 : (data.down_payment_percent || 0);
 
         setFormData({
           company_name: data.company_name || '',
@@ -480,7 +477,7 @@ export default function CostSheetForm() {
           tenure_years: data.tenure_years || 3,
           ex_showroom_price: data.ex_showroom_price || 0,
           discount: data.discount || 0,
-          down_payment_percent: isNaN(downPaymentPercent) ? 0 : downPaymentPercent,
+          down_payment_percent: downPaymentPercent,
           registration_charges: data.registration_charges || 0,
           monthly_km: data.monthly_km || 3000,
           daily_hours: data.daily_hours || 8,
@@ -998,7 +995,7 @@ export default function CostSheetForm() {
                 />
                 {errors.down_payment_percent && <p className="text-xs text-destructive">{errors.down_payment_percent}</p>}
                 <p className="text-xs text-muted-foreground">
-                  On ex-showroom price {formatCurrency(formData.ex_showroom_price)}
+                  On discounted price {formatCurrency(calculations.discounted_price)}
                 </p>
               </div>
             )}
@@ -1016,7 +1013,7 @@ export default function CostSheetForm() {
                 {formatCurrency(calculations.loan_amount)}
               </div>
               <p className="text-xs text-muted-foreground">
-                Ex-showroom - Down payment
+                Discounted price - Down payment
               </p>
             </div>
           </CardContent>
@@ -1094,7 +1091,7 @@ export default function CostSheetForm() {
                 Interest Rate: {interestRate}% p.a. | Loan: {formatCurrency(calculations.loan_amount)} | Tenure: {calculations.tenure_months} months
               </p>
               <div className="text-xs text-muted-foreground mt-2 p-2 bg-muted/50 rounded">
-                <strong>Loan breakdown:</strong> Ex-showroom price {formatCurrency(formData.ex_showroom_price)}
+                <strong>Loan breakdown:</strong> Discounted price {formatCurrency(calculations.discounted_price)}
                 {calculations.down_payment_amount > 0 && ` - Down payment ${formatCurrency(calculations.down_payment_amount)}`}
                 {' = Loan amount ' + formatCurrency(calculations.loan_amount)}
               </div>
