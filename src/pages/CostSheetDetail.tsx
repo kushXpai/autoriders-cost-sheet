@@ -374,18 +374,12 @@ export default function CostSheetDetail() {
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 md:grid-cols-1">
+            <DetailRow label="Ex-Showroom Price" value={formatCurrency(costSheet.ex_showroom_price)} />
             {isAdmin && (
               <>
-                <DetailRow label="Ex-Showroom Price" value={formatCurrency(costSheet.ex_showroom_price)} />
                 <DetailRow label="Discount" value={`- ${formatCurrency(costSheet.discount)}`} className="text-green-600" />
                 <DetailRow label="Discounted Price" value={formatCurrency(costSheet.discounted_price)} className="text-blue-600 font-semibold" />
                 <Separator className="my-2" />
-              </>
-            )}
-            <DetailRow label="Vehicle Cost (On-Road)" value={formatCurrency(costSheet.on_road_price)} />
-            <Separator className="my-2" />
-            {isAdmin && (
-              <>
                 <DetailRow label="Down Payment %" value={`${costSheet.down_payment_percent.toFixed(1)}%`} />
                 <DetailRow label="Down Payment Amount" value={formatCurrency(costSheet.down_payment_amount)} />
                 <Separator className="my-2" />
