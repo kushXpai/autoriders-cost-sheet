@@ -1,0 +1,831 @@
+CREATE TYPE user_role AS ENUM (
+  'SUPERADMIN',
+  'ADMIN',
+  'REGIONAL_MANAGER',
+  'MANAGER'
+);
+
+CREATE TYPE fuel_type AS ENUM ('PETROL', 'DIESEL', 'HYBRID', 'EV');
+
+CREATE TYPE cost_sheet_status AS ENUM (
+  'DRAFT',
+  'PENDING_APPROVAL',
+  'APPROVED',
+  'REJECTED'
+);
+
+CREATE TABLE users (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  full_name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  role user_role NOT NULL DEFAULT 'STAFF',
+  reports_to UUID REFERENCES users(id) ON DELETE SET NULL
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+
+-- SUPERADMIN
+INSERT INTO users (id, full_name, email, role)
+SELECT id, 'Super Admin', email, 'SUPERADMIN'
+FROM auth.users
+WHERE email = 'superadmin@test.com';
+
+-- ADMIN
+INSERT INTO users (id, full_name, email, role)
+SELECT id, 'Admin User', email, 'ADMIN'
+FROM auth.users
+WHERE email = 'admin@test.com';
+
+-- STAFF
+INSERT INTO users (id, full_name, email, role)
+SELECT id, 'Staff User', email, 'STAFF'
+FROM auth.users
+WHERE email = 'staff@test.com';
+
+
+
+
+
+
+
+-- ============================================================================
+-- SIMPLE MIGRATION: Add Regional Manager Role & Reporting Hierarchy
+-- For fresh database or when role column doesn't exist yet
+-- ============================================================================
+
+-- Step 1: Drop existing type if it exists
+-- ============================================================================
+DROP TYPE IF EXISTS user_role CASCADE;
+
+-- Step 2: Create the new enum type
+-- ============================================================================
+CREATE TYPE user_role AS ENUM (
+  'SUPERADMIN',
+  'ADMIN',
+  'REGIONAL_MANAGER',
+  'MANAGER'
+);
+
+-- Step 3: Add role column (safe - won't fail if already exists)
+-- ============================================================================
+ALTER TABLE users 
+ADD COLUMN IF NOT EXISTS role user_role NOT NULL DEFAULT 'MANAGER';
+
+-- Step 4: Add reports_to column (safe - won't fail if already exists)
+-- ============================================================================
+ALTER TABLE users 
+ADD COLUMN IF NOT EXISTS reports_to UUID REFERENCES users(id) ON DELETE SET NULL;
+
+-- Step 5: Create index for performance
+-- ============================================================================
+CREATE INDEX IF NOT EXISTS idx_users_reports_to ON users(reports_to);
+
+-- ============================================================================
+-- DONE! Now verify with these queries:
+-- ============================================================================
+
+-- See your table structure:
+SELECT column_name, data_type, is_nullable, column_default
+FROM information_schema.columns
+WHERE table_name = 'users'
+ORDER BY ordinal_position;
+
+-- See all users:
+-- SELECT id, full_name, email, role, reports_to, is_active FROM users;
+
+
+Select * from users;
+
+
+CREATE TABLE vehicles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  brand_name TEXT NOT NULL,
+  model_name TEXT NOT NULL,
+  variant_name TEXT NOT NULL,
+  fuel_type fuel_type NOT NULL,
+  mileage_km_per_unit NUMERIC NOT NULL,
+  maintenance_cost_per_km NUMERIC NOT NULL DEFAULT 0,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+
+
+-- Toyota Innova Crysta Variants (Diesel)
+INSERT INTO vehicles (brand_name, model_name, variant_name, fuel_type, mileage_km_per_unit, is_active) VALUES
+('Toyota', 'Innova Crysta', 'GX Diesel Manual 7 STR', 'DIESEL', 15, true),
+('Toyota', 'Innova Crysta', 'GX Diesel Manual 8 STR', 'DIESEL', 14, true),
+('Toyota', 'Innova Crysta', 'GX Plus Diesel Manual 7 STR', 'DIESEL', 14, true),
+('Toyota', 'Innova Crysta', 'GX Plus Diesel Manual 8 STR', 'DIESEL', 14, true),
+('Toyota', 'Innova Crysta', 'VX Diesel Manual 7 STR', 'DIESEL', 14, true),
+('Toyota', 'Innova Crysta', 'VX Diesel Manual 8 STR', 'DIESEL', 14, true),
+('Toyota', 'Innova Crysta', 'ZX Diesel Manual 7 STR', 'DIESEL', 13, true);
+
+-- Toyota Innova Hycross Variants (Petrol Hybrid)
+INSERT INTO vehicles (brand_name, model_name, variant_name, fuel_type, mileage_km_per_unit, is_active) VALUES
+('Toyota', 'Innova Hycross', 'Base Petrol Hybrid e-CVT', 'HYBRID', 16, true),
+('Toyota', 'Innova Hycross', 'Mid Petrol Hybrid e-CVT', 'HYBRID', 18, true),
+('Toyota', 'Innova Hycross', 'Top Petrol Hybrid e-CVT', 'HYBRID', 23, true);
+
+-- Maruti Ciaz Variants (Petrol)
+INSERT INTO vehicles (brand_name, model_name, variant_name, fuel_type, mileage_km_per_unit, is_active) VALUES
+('Maruti', 'Ciaz', 'Sigma 1.5 Petrol Manual', 'PETROL', 20, true),
+('Maruti', 'Ciaz', 'Delta 1.5 Petrol Manual', 'PETROL', 20, true),
+('Maruti', 'Ciaz', 'Zeta 1.5 Petrol Manual', 'PETROL', 20, true),
+('Maruti', 'Ciaz', 'Alpha 1.5 Petrol Manual', 'PETROL', 20, true),
+('Maruti', 'Ciaz', 'Delta 1.5 Petrol Automatic (TC)', 'PETROL', 20, true),
+('Maruti', 'Ciaz', 'Zeta 1.5 Petrol Automatic (TC)', 'PETROL', 20, true),
+('Maruti', 'Ciaz', 'Alpha 1.5 Petrol Automatic (TC)', 'PETROL', 20, true);
+
+-- Maruti Swift Dzire Variants (Petrol & CNG)
+INSERT INTO vehicles (brand_name, model_name, variant_name, fuel_type, mileage_km_per_unit, is_active) VALUES
+('Maruti', 'Swift Dzire', 'LXi Petrol Manual', 'PETROL', 24, true),
+('Maruti', 'Swift Dzire', 'VXi Petrol Manual', 'PETROL', 24, true),
+('Maruti', 'Swift Dzire', 'VXi Petrol Automatic (AMT)', 'PETROL', 25, true),
+('Maruti', 'Swift Dzire', 'ZXi Petrol Manual', 'PETROL', 24, true),
+('Maruti', 'Swift Dzire', 'ZXi Petrol Automatic (AMT)', 'PETROL', 25, true),
+('Maruti', 'Swift Dzire', 'ZXi Plus Petrol Manual', 'PETROL', 24, true),
+('Maruti', 'Swift Dzire', 'ZXi Plus Petrol Automatic (AMT)', 'PETROL', 25, true);
+
+
+ALTER TABLE vehicles
+ADD COLUMN maintenance_cost_per_km NUMERIC NOT NULL DEFAULT 0;
+
+
+UPDATE vehicles
+SET maintenance_cost_per_km = 3.0
+WHERE brand_name = 'Toyota'
+  AND model_name = 'Innova Crysta'
+  AND variant_name ILIKE '%GX%';
+
+UPDATE vehicles
+SET maintenance_cost_per_km = 3.2
+WHERE brand_name = 'Toyota'
+  AND model_name = 'Innova Crysta'
+  AND variant_name ILIKE '%GX Plus%';
+
+UPDATE vehicles
+SET maintenance_cost_per_km = 3.3
+WHERE brand_name = 'Toyota'
+  AND model_name = 'Innova Crysta'
+  AND variant_name ILIKE '%VX%';
+
+UPDATE vehicles
+SET maintenance_cost_per_km = 3.5
+WHERE brand_name = 'Toyota'
+  AND model_name = 'Innova Crysta'
+  AND variant_name ILIKE '%ZX%';
+
+UPDATE vehicles
+SET maintenance_cost_per_km = 2.5
+WHERE brand_name = 'Toyota'
+  AND model_name = 'Innova Hycross'
+  AND variant_name ILIKE '%Base%';
+
+UPDATE vehicles
+SET maintenance_cost_per_km = 2.6
+WHERE brand_name = 'Toyota'
+  AND model_name = 'Innova Hycross'
+  AND variant_name ILIKE '%Mid%';
+
+UPDATE vehicles
+SET maintenance_cost_per_km = 2.8
+WHERE brand_name = 'Toyota'
+  AND model_name = 'Innova Hycross'
+  AND variant_name ILIKE '%Top%';
+
+UPDATE vehicles
+SET maintenance_cost_per_km = 1.6
+WHERE brand_name = 'Maruti'
+  AND model_name = 'Ciaz'
+  AND variant_name ILIKE '%Sigma%';
+
+UPDATE vehicles
+SET maintenance_cost_per_km = 1.6
+WHERE brand_name = 'Maruti'
+  AND model_name = 'Ciaz'
+  AND variant_name ILIKE '%Delta%';
+
+UPDATE vehicles
+SET maintenance_cost_per_km = 1.7
+WHERE brand_name = 'Maruti'
+  AND model_name = 'Ciaz'
+  AND variant_name ILIKE '%Zeta%';
+
+UPDATE vehicles
+SET maintenance_cost_per_km = 1.8
+WHERE brand_name = 'Maruti'
+  AND model_name = 'Ciaz'
+  AND variant_name ILIKE '%Alpha%';
+
+UPDATE vehicles
+SET maintenance_cost_per_km = 1.4
+WHERE brand_name = 'Maruti'
+  AND model_name = 'Swift Dzire'
+  AND variant_name ILIKE '%LXi%';
+
+UPDATE vehicles
+SET maintenance_cost_per_km = 1.4
+WHERE brand_name = 'Maruti'
+  AND model_name = 'Swift Dzire'
+  AND variant_name ILIKE '%VXi%Manual%';
+
+UPDATE vehicles
+SET maintenance_cost_per_km = 1.6
+WHERE brand_name = 'Maruti'
+  AND model_name = 'Swift Dzire'
+  AND variant_name ILIKE '%Automatic%';
+
+UPDATE vehicles
+SET maintenance_cost_per_km = 1.5
+WHERE brand_name = 'Maruti'
+  AND model_name = 'Swift Dzire'
+  AND variant_name ILIKE '%ZXi%Manual%';
+
+UPDATE vehicles
+SET maintenance_cost_per_km = 1.8
+WHERE brand_name = 'Maruti'
+  AND model_name = 'Swift Dzire'
+  AND variant_name ILIKE '%ZXi Plus%Automatic%';
+
+
+SELECT
+  brand_name,
+  model_name,
+  variant_name,
+  maintenance_cost_per_km
+FROM vehicles
+ORDER BY brand_name, model_name;
+
+
+
+
+
+
+
+
+
+
+-- ============================================================================
+-- MIGRATION: Update Hybrid to be a Tag/Flag instead of Fuel Type
+-- ============================================================================
+
+-- Step 1: Add is_hybrid column to vehicles table
+-- ============================================================================
+ALTER TABLE vehicles 
+ADD COLUMN IF NOT EXISTS is_hybrid BOOLEAN DEFAULT FALSE;
+
+-- Step 2: Update existing hybrid vehicles
+-- ============================================================================
+-- Set is_hybrid = TRUE for all vehicles with fuel_type = 'HYBRID'
+-- And change their fuel_type to PETROL (you can manually adjust these later)
+UPDATE vehicles 
+SET is_hybrid = TRUE,
+    fuel_type = 'PETROL'  -- Default to PETROL, adjust as needed
+WHERE fuel_type = 'HYBRID';
+
+-- Step 3: Drop and recreate fuel_type enum WITHOUT 'HYBRID'
+-- ============================================================================
+-- First, change column to text
+ALTER TABLE vehicles 
+ALTER COLUMN fuel_type TYPE TEXT;
+
+-- Drop old enum
+DROP TYPE IF EXISTS fuel_type CASCADE;
+
+-- Create new enum without HYBRID
+CREATE TYPE fuel_type AS ENUM ('PETROL', 'DIESEL', 'EV');
+
+-- Convert column back to enum
+ALTER TABLE vehicles 
+ALTER COLUMN fuel_type TYPE fuel_type USING fuel_type::fuel_type;
+
+-- ============================================================================
+-- VERIFICATION QUERIES
+-- ============================================================================
+
+-- Check the new structure
+-- SELECT column_name, data_type, is_nullable 
+-- FROM information_schema.columns 
+-- WHERE table_name = 'vehicles' 
+-- ORDER BY ordinal_position;
+
+-- Check hybrid vehicles
+-- SELECT 
+--   brand_name, 
+--   model_name, 
+--   variant_name, 
+--   fuel_type,
+--   is_hybrid,
+--   CASE 
+--     WHEN is_hybrid THEN fuel_type::text || ' HYBRID'
+--     ELSE fuel_type::text 
+--   END as display_fuel_type
+-- FROM vehicles
+-- ORDER BY brand_name, model_name;
+
+-- ============================================================================
+-- ROLLBACK (if needed)
+-- ============================================================================
+-- To rollback:
+-- ALTER TABLE vehicles DROP COLUMN IF EXISTS is_hybrid;
+-- Then recreate the old fuel_type enum with HYBRID included
+
+
+CREATE TABLE cities (
+  name TEXT PRIMARY KEY
+);
+
+INSERT INTO cities (name) VALUES
+('Mumbai'), ('Delhi'), ('Ahmedabad'), ('Chennai'), ('Bangalore'),
+('Hyderabad'), ('Vadodara'), ('Kolkata'), ('Gurugram'), ('Pune');
+
+
+CREATE TABLE fuel_rates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  fuel_type fuel_type NOT NULL,
+  city TEXT REFERENCES cities(name),
+  rate_per_unit NUMERIC NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  effective_date DATE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+
+-- PETROL & DIESEL Fuel Rates for all cities (effective_date = current date)
+
+INSERT INTO fuel_rates (fuel_type, city, rate_per_unit, effective_date)
+VALUES
+-- Mumbai
+('PETROL', 'Mumbai', 104.21, CURRENT_DATE),
+('DIESEL', 'Mumbai', 92.15, CURRENT_DATE),
+
+-- Delhi
+('PETROL', 'Delhi', 94.72, CURRENT_DATE),
+('DIESEL', 'Delhi', 87.62, CURRENT_DATE),
+
+-- Ahmedabad
+('PETROL', 'Ahmedabad', 94.49, CURRENT_DATE),
+('DIESEL', 'Ahmedabad', 90.17, CURRENT_DATE),
+
+-- Chennai
+('PETROL', 'Chennai', 100.85, CURRENT_DATE),
+('DIESEL', 'Chennai', 92.34, CURRENT_DATE),
+
+-- Bangalore
+('PETROL', 'Bangalore', 102.92, CURRENT_DATE),
+('DIESEL', 'Bangalore', 89.02, CURRENT_DATE),
+
+-- Hyderabad
+('PETROL', 'Hyderabad', 107.46, CURRENT_DATE),
+('DIESEL', 'Hyderabad', 95.70, CURRENT_DATE),
+
+-- Vadodara (similar to Ahmedabad region)
+('PETROL', 'Vadodara', 94.49, CURRENT_DATE),
+('DIESEL', 'Vadodara', 90.17, CURRENT_DATE),
+
+-- Kolkata
+('PETROL', 'Kolkata', 103.94, CURRENT_DATE),
+('DIESEL', 'Kolkata', 90.76, CURRENT_DATE),
+
+-- Gurugram (near Delhi)
+('PETROL', 'Gurugram', 94.77, CURRENT_DATE),
+('DIESEL', 'Gurugram', 87.67, CURRENT_DATE),
+
+-- Pune
+('PETROL', 'Pune', 104.04, CURRENT_DATE),
+('DIESEL', 'Pune', 90.57, CURRENT_DATE);
+
+
+
+
+ALTER TABLE fuel_rates ADD COLUMN is_active BOOLEAN DEFAULT true;
+
+-- Set only the latest rate per fuel_type per city as active
+WITH ranked_rates AS (
+  SELECT 
+    id,
+    ROW_NUMBER() OVER (PARTITION BY fuel_type, city ORDER BY effective_date DESC) as rn
+  FROM fuel_rates
+)
+UPDATE fuel_rates
+SET is_active = CASE WHEN id IN (SELECT id FROM ranked_rates WHERE rn = 1) THEN true ELSE false END;
+
+CREATE TABLE interest_rates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  interest_rate_percent NUMERIC NOT NULL,
+  effective_from DATE NOT NULL,
+  is_active BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE admin_charges (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  admin_charge_percent NUMERIC NOT NULL,
+  effective_from DATE NOT NULL,
+  is_active BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE insurance_rates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  insurance_rate_percent NUMERIC NOT NULL,
+  effective_from DATE NOT NULL,
+  is_active BOOLEAN DEFAULT TRUE
+);
+
+
+CREATE TABLE email_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  admin_emails TEXT[] NOT NULL,
+  super_admin_email TEXT NOT NULL,
+  notifications_enabled BOOLEAN DEFAULT TRUE,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+INSERT INTO email_settings (
+  admin_emails,
+  super_admin_email,
+  notifications_enabled
+)
+VALUES (
+  ARRAY[
+    'pai.mithil@gmail.com',
+    'admin2@company.com'
+  ],
+  'superadmin@company.com',
+  TRUE
+);
+
+
+COMMENT ON TABLE email_settings IS 'Email notification settings for cost sheet workflow';
+
+-- Add comments to columns
+COMMENT ON COLUMN email_settings.admin_emails IS 'Array of admin email addresses for CC notifications';
+COMMENT ON COLUMN email_settings.super_admin_email IS 'Super admin email for approval notifications';
+COMMENT ON COLUMN email_settings.notifications_enabled IS 'Global toggle for email notifications';
+
+-- Create updated_at trigger function if it doesn't exist
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger for email_settings
+DROP TRIGGER IF EXISTS update_email_settings_updated_at ON email_settings;
+CREATE TRIGGER update_email_settings_updated_at
+  BEFORE UPDATE ON email_settings
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+
+  CREATE TABLE cost_sheets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  
+  -- Company & Vehicle
+  company_name TEXT NOT NULL,
+  city TEXT,
+  vehicle_id UUID REFERENCES vehicles(id),
+  
+  -- Tenure
+  tenure_years INT NOT NULL,
+  tenure_months INT NOT NULL,
+  
+  -- Vehicle Cost & Financing
+  ex_showroom_price NUMERIC NOT NULL CHECK (ex_showroom_price >= 0),
+  discount NUMERIC DEFAULT 0 CHECK (discount >= 0),
+  discounted_price NUMERIC DEFAULT 0 CHECK (discounted_price >= 0),
+  insurance_amount_monthly NUMERIC NOT NULL,
+  registration_charges NUMERIC NOT NULL,
+  registration_monthly NUMERIC DEFAULT 0
+  on_road_price NUMERIC NOT NULL,
+  
+  down_payment_percent NUMERIC NOT NULL DEFAULT 0 
+    CHECK (down_payment_percent >= 0 AND down_payment_percent <= 100),
+  down_payment_amount NUMERIC NOT NULL DEFAULT 0 
+    CHECK (down_payment_amount >= 0),
+  loan_amount NUMERIC NOT NULL DEFAULT 0 
+    CHECK (loan_amount >= 0),
+  emi_amount NUMERIC NOT NULL,
+  
+  -- Subtotal A
+  subtotal_a NUMERIC NOT NULL,
+  
+  -- Usage & Fuel
+  monthly_km NUMERIC NOT NULL,
+  daily_hours NUMERIC NOT NULL,
+  mileage_per_liter NUMERIC CHECK (mileage_per_liter > 0)
+  fuel_cost NUMERIC NOT NULL,
+  
+  -- Driver Costs
+  drivers_count INT NOT NULL,
+  driver_salary_per_driver NUMERIC NOT NULL,
+  total_driver_cost NUMERIC NOT NULL,
+  
+  -- Optional Monthly Costs
+  parking_charges NUMERIC DEFAULT 0,
+  maintenance_cost_per_km NUMERIC DEFAULT 0 CHECK (maintenance_cost_per_km >= 0)
+  maintenance_cost NUMERIC DEFAULT 0,
+  supervisor_cost NUMERIC DEFAULT 0,
+  gps_camera_cost NUMERIC DEFAULT 0,
+  permit_cost NUMERIC DEFAULT 0,
+  subtotal_b NUMERIC NOT NULL,
+  
+  -- Admin Charges
+  admin_charge_percent NUMERIC NOT NULL,
+  admin_charge_amount NUMERIC NOT NULL,
+  
+  -- Final Total
+  grand_total NUMERIC NOT NULL,
+  
+  -- Workflow
+  status cost_sheet_status DEFAULT 'DRAFT',
+  approval_remarks TEXT,
+  submitted_at TIMESTAMPTZ,
+  approved_at TIMESTAMPTZ,
+  approved_by UUID REFERENCES users(id),
+  
+  -- Output
+  pdf_url TEXT,
+  
+  -- Audit
+  created_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+
+-- Add mileage per liter field
+ALTER TABLE cost_sheets 
+ADD COLUMN mileage_per_liter NUMERIC CHECK (mileage_per_liter > 0);
+
+-- Add maintenance cost per km field
+ALTER TABLE cost_sheets 
+ADD COLUMN maintenance_cost_per_km NUMERIC DEFAULT 0 CHECK (maintenance_cost_per_km >= 0);
+
+-- Rename the column from insurance_amount to insurance_amount_monthly
+ALTER TABLE cost_sheets 
+RENAME COLUMN insurance_amount TO insurance_amount_monthly;
+
+-- Add the new registration_monthly column
+ALTER TABLE cost_sheets 
+ADD COLUMN registration_monthly NUMERIC DEFAULT 0;
+
+
+ALTER TABLE cost_sheets ADD COLUMN city TEXT;
+
+
+-- Add discount and discounted_price columns
+ALTER TABLE cost_sheets
+ADD COLUMN discount NUMERIC DEFAULT 0 CHECK (discount >= 0),
+ADD COLUMN discounted_price NUMERIC DEFAULT 0 CHECK (discounted_price >= 0);
+
+-- Add comment for clarity
+COMMENT ON COLUMN cost_sheets.discount IS 'Discount amount applied to ex_showroom_price';
+COMMENT ON COLUMN cost_sheets.discounted_price IS 'Ex-showroom price after discount (ex_showroom_price - discount)';
+
+
+
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_users_updated
+BEFORE UPDATE ON users
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_cost_sheets_updated
+BEFORE UPDATE ON cost_sheets
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_email_settings_updated
+BEFORE UPDATE ON email_settings
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+
+-- Enable RLS on all tables
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE vehicles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fuel_rates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE interest_rates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE admin_charges ENABLE ROW LEVEL SECURITY;
+ALTER TABLE email_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE insurance_rates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cost_sheets ENABLE ROW LEVEL SECURITY;
+
+-- Helper function to check admin role
+CREATE OR REPLACE FUNCTION is_admin()
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM users
+    WHERE id = auth.uid()
+      AND role IN ('ADMIN', 'SUPERADMIN')
+      AND is_active = TRUE
+  );
+$$ LANGUAGE sql STABLE;
+
+-- =====================
+-- USERS TABLE
+-- =====================
+
+-- Users can view their own profile
+CREATE POLICY "Users can view own profile"
+ON users
+FOR SELECT
+USING (id = auth.uid());
+
+-- Admins manage all users
+CREATE POLICY "Admins manage users"
+ON users
+FOR ALL
+USING (is_admin());
+
+-- =====================
+-- VEHICLES TABLE
+-- =====================
+
+CREATE POLICY "Authenticated users read vehicles"
+ON vehicles
+FOR SELECT
+USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Admins insert vehicles"
+ON vehicles
+FOR INSERT
+USING (is_admin());
+
+CREATE POLICY "Admins update vehicles"
+ON vehicles
+FOR UPDATE
+USING (is_admin());
+
+CREATE POLICY "Admins delete vehicles"
+ON vehicles
+FOR DELETE
+USING (is_admin());
+
+-- =====================
+-- FUEL RATES
+-- =====================
+
+CREATE POLICY "Authenticated users read fuel rates"
+ON fuel_rates
+FOR SELECT
+USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Admins insert fuel rates"
+ON fuel_rates
+FOR INSERT
+USING (is_admin());
+
+CREATE POLICY "Admins update fuel rates"
+ON fuel_rates
+FOR UPDATE
+USING (is_admin());
+
+CREATE POLICY "Admins delete fuel rates"
+ON fuel_rates
+FOR DELETE
+USING (is_admin());
+
+-- =====================
+-- INTEREST RATES
+-- =====================
+
+CREATE POLICY "Authenticated users read interest rates"
+ON interest_rates
+FOR SELECT
+USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Admins insert interest rates"
+ON interest_rates
+FOR INSERT
+USING (is_admin());
+
+CREATE POLICY "Admins update interest rates"
+ON interest_rates
+FOR UPDATE
+USING (is_admin());
+
+CREATE POLICY "Admins delete interest rates"
+ON interest_rates
+FOR DELETE
+USING (is_admin());
+
+-- =====================
+-- ADMIN CHARGES
+-- =====================
+
+CREATE POLICY "Authenticated users read admin charges"
+ON admin_charges
+FOR SELECT
+USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Admins insert admin charges"
+ON admin_charges
+FOR INSERT
+USING (is_admin());
+
+CREATE POLICY "Admins update admin charges"
+ON admin_charges
+FOR UPDATE
+USING (is_admin());
+
+CREATE POLICY "Admins delete admin charges"
+ON admin_charges
+FOR DELETE
+USING (is_admin());
+
+-- =====================
+-- INSURANCE RATES
+-- =====================
+
+CREATE POLICY "Authenticated users read insurance rates"
+ON insurance_rates
+FOR SELECT
+USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Admins insert insurance rates"
+ON insurance_rates
+FOR INSERT
+USING (is_admin());
+
+CREATE POLICY "Admins update insurance rates"
+ON insurance_rates
+FOR UPDATE
+USING (is_admin());
+
+CREATE POLICY "Admins delete insurance rates"
+ON insurance_rates
+FOR DELETE
+USING (is_admin());
+
+-- =====================
+-- EMAIL SETTINGS
+-- =====================
+
+CREATE POLICY "Admins manage email settings"
+ON email_settings
+FOR ALL
+USING (is_admin());
+
+-- =====================
+-- COST SHEETS
+-- =====================
+
+-- Users manage their own cost sheets
+CREATE POLICY "Users manage own cost sheets select"
+ON cost_sheets
+FOR SELECT
+USING (created_by = auth.uid());
+
+CREATE POLICY "Users manage own cost sheets insert"
+ON cost_sheets
+FOR INSERT
+USING (created_by = auth.uid())
+WITH CHECK (created_by = auth.uid());
+
+CREATE POLICY "Users manage own cost sheets update"
+ON cost_sheets
+FOR UPDATE
+USING (created_by = auth.uid())
+WITH CHECK (created_by = auth.uid());
+
+CREATE POLICY "Users manage own cost sheets delete"
+ON cost_sheets
+FOR DELETE
+USING (created_by = auth.uid());
+
+-- Admins manage all cost sheets
+CREATE POLICY "Admins manage all cost sheets"
+ON cost_sheets
+FOR ALL
+USING (is_admin());
+
+-- =====================
+-- TRIGGER: Prevent staff approval
+-- =====================
+
+CREATE OR REPLACE FUNCTION prevent_staff_approval()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.status IN ('APPROVED', 'REJECTED')
+     AND NOT is_admin() THEN
+    RAISE EXCEPTION 'Only admins can approve or reject cost sheets';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_prevent_staff_approval
+BEFORE UPDATE ON cost_sheets
+FOR EACH ROW
+EXECUTE FUNCTION prevent_staff_approval();
