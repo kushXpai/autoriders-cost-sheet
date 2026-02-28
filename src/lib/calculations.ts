@@ -147,7 +147,7 @@ export async function calculateCostSheet(
     formData.ex_showroom_price * (insuranceRate / 100);
 
   const insurance_amount_monthly = insurance_amount_annual / 12;
-  const registration_monthly = formData.registration_charges / 12;
+  const registration_monthly = formData.registration_charges / tenure_months;
 
   // On-road price = discounted price + annual insurance + registration
   const on_road_price =
