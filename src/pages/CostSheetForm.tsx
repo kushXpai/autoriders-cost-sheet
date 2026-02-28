@@ -64,7 +64,7 @@ const formSchema = z.object({
 export default function CostSheetForm() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isSuperAdmin } = useAuth();
   const { toast } = useToast();
   const isEditing = !!id;
 
@@ -230,10 +230,7 @@ export default function CostSheetForm() {
 
       const now = new Date().toISOString();
 
-      const autoSaveStatus: CostSheetStatus = 
-        isEditing && originalStatus ? originalStatus : 
-        isAdmin ? 'APPROVED' : 
-        'DRAFT';
+      const dbStatus: CostSheetStatus = isSuperAdmin ? 'APPROVED' : 'DRAFT';
 
       const selectedVehicle = vehicles.find(v => v.id === formDataRef.current.vehicle_id);
 
@@ -272,11 +269,11 @@ export default function CostSheetForm() {
         admin_charge_percent: safeCalculations.admin_charge_percent,
         admin_charge_amount: safeCalculations.admin_charge_amount,
         grand_total: safeCalculations.grand_total,
-        status: autoSaveStatus,
-        approval_remarks: (autoSaveStatus === 'APPROVED' && isAdmin && !isEditing) ? 'Auto-approved (Superadmin)' : '',
-        submitted_at: (autoSaveStatus === 'PENDING_APPROVAL' || autoSaveStatus === 'APPROVED') && !isEditing ? now : null,
-        approved_at: autoSaveStatus === 'APPROVED' && !isEditing ? now : null,
-        approved_by: autoSaveStatus === 'APPROVED' && !isEditing ? user.id : null,
+        status: dbStatus,
+        approval_remarks: dbStatus === 'APPROVED' ? 'Auto-approved (Superadmin)' : '',
+        submitted_at: dbStatus === 'APPROVED' && !isEditing ? now : null,
+        approved_at: dbStatus === 'APPROVED' && !isEditing ? now : null,
+        approved_by: dbStatus === 'APPROVED' && !isEditing ? user.id : null,
         pdf_url: null,
         created_by: (isEditing && originalCreatedBy) ? originalCreatedBy : user.id,
       };
@@ -335,7 +332,7 @@ export default function CostSheetForm() {
     const ex_showroom = formDataRef.current.ex_showroom_price || 0;
     const discount = formDataRef.current.discount || 0;
     const discounted_price = ex_showroom - discount;
-    
+
     // Insurance calculated on original ex-showroom price
     const insurance_amount_annual = ex_showroom * (insuranceRate / 100);
     const insurance_amount_monthly = insurance_amount_annual / 12;
@@ -578,7 +575,7 @@ export default function CostSheetForm() {
     const ex_showroom = formData.ex_showroom_price || 0;
     const discount = formData.discount || 0;
     const discounted_price = ex_showroom - discount;
-    
+
     // Insurance calculated on original ex-showroom price
     const insurance_amount_annual = ex_showroom * (insuranceRate / 100);
     const insurance_amount_monthly = insurance_amount_annual / 12;
@@ -661,7 +658,7 @@ export default function CostSheetForm() {
       const now = new Date().toISOString();
 
       // Superadmin's own sheets are always APPROVED
-      const finalStatus: CostSheetStatus = isAdmin ? 'APPROVED' : status;
+      const finalStatus: CostSheetStatus = isSuperAdmin ? 'APPROVED' : status;
 
       const costSheetData: Omit<CostSheet, 'id' | 'created_at' | 'updated_at'> = {
         company_name: formData.company_name.trim(),
@@ -699,8 +696,8 @@ export default function CostSheetForm() {
         admin_charge_amount: calculations.admin_charge_amount,
         grand_total: calculations.grand_total,
         status: finalStatus,
-        approval_remarks: isAdmin ? 'Auto-approved (Superadmin)' : '',
-        submitted_at: finalStatus === 'PENDING_APPROVAL' || finalStatus === 'APPROVED' ? now : null,
+        approval_remarks: isSuperAdmin ? 'Auto-approved (Superadmin)' : '',
+        submitted_at: finalStatus === 'APPROVED' ? now : null,
         approved_at: finalStatus === 'APPROVED' ? now : null,
         approved_by: finalStatus === 'APPROVED' ? user.id : null,
         pdf_url: null,
@@ -748,7 +745,7 @@ export default function CostSheetForm() {
       autoSavedDraftIdRef.current = null;
 
       // Send email notification only for regular users submitting for approval
-      if (!isAdmin && finalStatus === 'PENDING_APPROVAL' && result.data) {
+      if (!isSuperAdmin && finalStatus === 'PENDING_APPROVAL' && result.data) {
         try {
           const { sendCostSheetSubmittedEmail } = await import('../services/email');
 
@@ -1007,42 +1004,42 @@ export default function CostSheetForm() {
             </div>
 
             <div className="space-y-2">
-                  <Label htmlFor="ex_showroom">Ex-Showroom Price (₹)</Label>
-                  <Input
-                    id="ex_showroom"
-                    type="number"
-                    min="0"
-                    value={formData.ex_showroom_price || ''}
-                    onChange={(e) => updateField('ex_showroom_price', parseFloat(e.target.value) || 0)}
-                  />
-                  {errors.ex_showroom_price && <p className="text-sm text-destructive">{errors.ex_showroom_price}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="discount">Discount Amount (₹)</Label>
-                  <Input
-                    id="discount"
-                    type="number"
-                    min="0"
-                    value={formData.discount || ''}
-                    onChange={(e) => updateField('discount', parseFloat(e.target.value) || 0)}
-                  />
-                  {errors.discount && <p className="text-sm text-destructive">{errors.discount}</p>}
-                  <p className="text-xs text-muted-foreground">
-                    Discount applied to ex-showroom price
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    Discounted Price
-                    <Calculator className="w-3 h-3 text-muted-foreground" />
-                  </Label>
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg font-medium text-blue-700">
-                    {formatCurrency(calculations.discounted_price)}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {formatCurrency(formData.ex_showroom_price)} - {formatCurrency(formData.discount)}
-                  </p>
-                </div>
+              <Label htmlFor="ex_showroom">Ex-Showroom Price (₹)</Label>
+              <Input
+                id="ex_showroom"
+                type="number"
+                min="0"
+                value={formData.ex_showroom_price || ''}
+                onChange={(e) => updateField('ex_showroom_price', parseFloat(e.target.value) || 0)}
+              />
+              {errors.ex_showroom_price && <p className="text-sm text-destructive">{errors.ex_showroom_price}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="discount">Discount Amount (₹)</Label>
+              <Input
+                id="discount"
+                type="number"
+                min="0"
+                value={formData.discount || ''}
+                onChange={(e) => updateField('discount', parseFloat(e.target.value) || 0)}
+              />
+              {errors.discount && <p className="text-sm text-destructive">{errors.discount}</p>}
+              <p className="text-xs text-muted-foreground">
+                Discount applied to ex-showroom price
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                Discounted Price
+                <Calculator className="w-3 h-3 text-muted-foreground" />
+              </Label>
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg font-medium text-blue-700">
+                {formatCurrency(calculations.discounted_price)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {formatCurrency(formData.ex_showroom_price)} - {formatCurrency(formData.discount)}
+              </p>
+            </div>
           </CardContent>
         </Card>
 
