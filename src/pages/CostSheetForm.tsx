@@ -106,7 +106,7 @@ export default function CostSheetForm() {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [autoSavedDraftId, setAutoSavedDraftId] = useState<string | null>(null);
-  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialLoadRef = useRef(true);
   const formDataRef = useRef(formData);
   const autoSavedDraftIdRef = useRef<string | null>(null);
@@ -997,7 +997,8 @@ export default function CostSheetForm() {
                 type="number"
                 min="1"
                 max="10"
-                value={formData.tenure_years}
+                value={formData.tenure_years || ''}
+                placeholder="3"
                 onChange={(e) => updateField('tenure_years', parseInt(e.target.value) || 0)}
               />
               <p className="text-xs text-muted-foreground">= {calculations.tenure_months} months</p>
@@ -1011,6 +1012,7 @@ export default function CostSheetForm() {
                 min="0"
                 value={formData.ex_showroom_price || ''}
                 onChange={(e) => updateField('ex_showroom_price', parseFloat(e.target.value) || 0)}
+                placeholder="0"
               />
               {errors.ex_showroom_price && <p className="text-sm text-destructive">{errors.ex_showroom_price}</p>}
             </div>
@@ -1022,6 +1024,7 @@ export default function CostSheetForm() {
                 min="0"
                 value={formData.discount || ''}
                 onChange={(e) => updateField('discount', parseFloat(e.target.value) || 0)}
+                placeholder="0"
               />
               {errors.discount && <p className="text-sm text-destructive">{errors.discount}</p>}
               <p className="text-xs text-muted-foreground">
@@ -1059,7 +1062,7 @@ export default function CostSheetForm() {
                   min="0"
                   max="100"
                   step="0.1"
-                  value={formData.down_payment_percent || 0}
+                  value={formData.down_payment_percent || ''}
                   onChange={(e) => updateField('down_payment_percent', parseFloat(e.target.value) || 0)}
                   placeholder="0"
                 />
@@ -1270,6 +1273,7 @@ export default function CostSheetForm() {
                     min="1"
                     value={formData.monthly_km || ''}
                     onChange={(e) => updateField('monthly_km', parseFloat(e.target.value) || 0)}
+                    placeholder="3000"
                   />
                   {errors.monthly_km && <p className="text-xs text-destructive">{errors.monthly_km}</p>}
                 </div>
@@ -1282,6 +1286,7 @@ export default function CostSheetForm() {
                     max="24"
                     value={formData.daily_hours || ''}
                     onChange={(e) => updateField('daily_hours', parseFloat(e.target.value) || 0)}
+                    placeholder="8"
                   />
                 </div>
                 <div className="space-y-2">
@@ -1315,6 +1320,7 @@ export default function CostSheetForm() {
                     min="0"
                     value={formData.drivers_count || ''}
                     onChange={(e) => updateField('drivers_count', parseInt(e.target.value) || 0)}
+                    placeholder="1"
                   />
                 </div>
                 <div className="space-y-2">
@@ -1325,6 +1331,7 @@ export default function CostSheetForm() {
                     min="0"
                     value={formData.driver_salary_per_driver || ''}
                     onChange={(e) => updateField('driver_salary_per_driver', parseFloat(e.target.value) || 0)}
+                    placeholder="15000"
                   />
                 </div>
                 <div className="space-y-2">
@@ -1374,6 +1381,7 @@ export default function CostSheetForm() {
                     min="0"
                     value={formData.parking_charges || ''}
                     onChange={(e) => updateField('parking_charges', parseFloat(e.target.value) || 0)}
+                    placeholder="0"
                   />
                 </div>
                 <div className="space-y-2">
@@ -1384,6 +1392,7 @@ export default function CostSheetForm() {
                     min="0"
                     value={formData.supervisor_cost || ''}
                     onChange={(e) => updateField('supervisor_cost', parseFloat(e.target.value) || 0)}
+                    placeholder="0"
                   />
                 </div>
                 <div className="space-y-2">
@@ -1394,6 +1403,7 @@ export default function CostSheetForm() {
                     min="0"
                     value={formData.gps_camera_cost || ''}
                     onChange={(e) => updateField('gps_camera_cost', parseFloat(e.target.value) || 0)}
+                    placeholder="0"
                   />
                 </div>
                 <div className="space-y-2">
@@ -1404,6 +1414,7 @@ export default function CostSheetForm() {
                     min="0"
                     value={formData.permit_cost || ''}
                     onChange={(e) => updateField('permit_cost', parseFloat(e.target.value) || 0)}
+                    placeholder="0"
                   />
                 </div>
               </div>
