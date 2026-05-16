@@ -39,8 +39,15 @@ import { Plus, Fuel, MapPin, TrendingUp, TrendingDown, Minus, AlertCircle } from
 import { useToast } from '@/hooks/use-toast';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
-type FuelRateType = 'PETROL' | 'DIESEL' | 'EV';
-const FUEL_TYPES: FuelRateType[] = ['PETROL', 'DIESEL', 'EV'];
+type FuelRateType = 'PETROL' | 'DIESEL' | 'EV' | 'CNG';
+const FUEL_TYPES: FuelRateType[] = ['PETROL', 'DIESEL', 'EV', 'CNG'];
+
+const FUEL_UNIT_LABEL: Record<FuelRateType, string> = {
+  PETROL: '/L',
+  DIESEL: '/L',
+  EV: '/kWh',
+  CNG: '/Kg',
+};
 const CITIES: City[] = [
   'Mumbai', 'Delhi', 'Ahmedabad', 'Chennai', 'Bangalore',
   'Hyderabad', 'Vadodara', 'Kolkata', 'Gurugram', 'Pune'
@@ -69,6 +76,7 @@ export default function FuelRates() {
       { fuel_type: 'PETROL' as FuelRateType, rate_per_unit: '', enabled: true },
       { fuel_type: 'DIESEL' as FuelRateType, rate_per_unit: '', enabled: false },
       { fuel_type: 'EV' as FuelRateType, rate_per_unit: '', enabled: false },
+      { fuel_type: 'CNG' as FuelRateType, rate_per_unit: '', enabled: false },
     ] as FuelRateFormData[],
   });
 
@@ -198,6 +206,7 @@ export default function FuelRates() {
         { fuel_type: 'PETROL', rate_per_unit: '', enabled: true },
         { fuel_type: 'DIESEL', rate_per_unit: '', enabled: false },
         { fuel_type: 'EV', rate_per_unit: '', enabled: false },
+        { fuel_type: 'CNG', rate_per_unit: '', enabled: false },
       ],
     });
     
@@ -364,6 +373,9 @@ export default function FuelRates() {
                         className="flex-shrink-0 w-20 cursor-pointer"
                       >
                         {rate.fuel_type}
+                        <span className="block text-xs text-muted-foreground font-normal">
+                          {FUEL_UNIT_LABEL[rate.fuel_type]}
+                        </span>
                       </Label>
                       <div className="flex-1">
                         <Input
@@ -371,7 +383,7 @@ export default function FuelRates() {
                           type="number"
                           step="0.01"
                           min="0.01"
-                          placeholder="Enter rate"
+                          placeholder={`Rate ${FUEL_UNIT_LABEL[rate.fuel_type]}`}
                           value={rate.rate_per_unit}
                           onChange={(e) => updateRateValue(rate.fuel_type, e.target.value)}
                           disabled={!rate.enabled}
@@ -437,14 +449,16 @@ export default function FuelRates() {
       </Card>
 
       {/* CURRENT RATES */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {groupedRates.map(({ type, currentRate, changePercent, changeDirection }) => (
           <Card key={type}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Fuel className="w-5 h-5" /> {type}
               </CardTitle>
-              <CardDescription>{selectedCity}</CardDescription>
+              <CardDescription>
+                {selectedCity} · {FUEL_UNIT_LABEL[type]}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {currentRate ? (
@@ -453,6 +467,7 @@ export default function FuelRates() {
                     <p className="text-3xl font-bold">
                       {formatCurrency(currentRate.rate_per_unit)}
                     </p>
+                    <span className="text-sm text-muted-foreground">{FUEL_UNIT_LABEL[type]}</span>
                     {changeDirection !== 'none' && (
                       <div className={`flex items-center gap-1 text-sm font-medium ${
                         changeDirection === 'up' ? 'text-red-600' : 'text-green-600'
@@ -503,6 +518,7 @@ export default function FuelRates() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Fuel Type</TableHead>
+                    <TableHead>Unit</TableHead>
                     <TableHead>Rate per Unit</TableHead>
                     <TableHead>Effective Date</TableHead>
                     <TableHead>Status</TableHead>
@@ -516,6 +532,9 @@ export default function FuelRates() {
                     return (
                       <TableRow key={rate.id}>
                         <TableCell className="font-medium">{rate.fuel_type}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {FUEL_UNIT_LABEL[rate.fuel_type as FuelRateType] ?? '/unit'}
+                        </TableCell>
                         <TableCell>{formatCurrency(rate.rate_per_unit)}</TableCell>
                         <TableCell>
                           {new Date(rate.effective_date).toLocaleDateString('en-IN', {

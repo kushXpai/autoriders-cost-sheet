@@ -16,7 +16,7 @@ export interface User {
 }
 
 // Vehicle Types
-export type FuelType = 'PETROL' | 'DIESEL' | 'EV';
+export type FuelType = 'PETROL' | 'DIESEL' | 'EV' | 'CNG';
 
 export interface Vehicle {
   id: string;

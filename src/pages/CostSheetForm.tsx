@@ -61,6 +61,14 @@ const formSchema = z.object({
   permit_cost: z.number().min(0),
 });
 
+const FUEL_UNIT_LABEL: Record<string, string> = {
+  PETROL: 'L',
+  DIESEL: 'L',
+  EV: 'kWh',
+  CNG: 'Kg',
+};
+const getFuelUnit = (fuelType?: string) => FUEL_UNIT_LABEL[fuelType ?? ''] ?? 'L';
+
 export default function CostSheetForm() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -127,7 +135,7 @@ export default function CostSheetForm() {
     brand_name: '',
     model_name: '',
     variant_name: '',
-    fuel_type: 'PETROL' as 'PETROL' | 'DIESEL' | 'EV',
+    fuel_type: 'PETROL' as 'PETROL' | 'DIESEL' | 'EV' | 'CNG',
     is_hybrid: false,
     mileage_km_per_unit: '',
     maintenance_cost_per_km: '',
@@ -169,7 +177,7 @@ export default function CostSheetForm() {
 
       toast({ title: 'Vehicle added!', description: `${data.brand_name} ${data.model_name} has been created and selected.` });
       setQuickAddVehicleOpen(false);
-      setQuickAddForm({ brand_name: '', model_name: '', variant_name: '', fuel_type: 'PETROL', is_hybrid: false, mileage_km_per_unit: '', maintenance_cost_per_km: '' });
+      setQuickAddForm({ brand_name: '', model_name: '', variant_name: '', fuel_type: 'PETROL', is_hybrid: false, mileage_km_per_unit: '', maintenance_cost_per_km: '' } as typeof quickAddForm);
     } catch (err: any) {
       toast({ title: 'Failed to add vehicle', description: err.message, variant: 'destructive' });
     } finally {
@@ -1208,7 +1216,7 @@ export default function CostSheetForm() {
               <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
                 <div className="space-y-2">
                   <Label htmlFor="mileage_per_liter">
-                    Mileage (km per {selectedVehicle?.fuel_type === 'EV' ? 'kWh' : 'Liter'})
+                    Mileage (km per {getFuelUnit(selectedVehicle?.fuel_type)})
                   </Label>
                   <Input
                     id="mileage_per_liter"
@@ -1220,7 +1228,7 @@ export default function CostSheetForm() {
                     placeholder={selectedVehicle?.mileage_km_per_unit?.toString() || '0'}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Default from vehicle: {selectedVehicle?.mileage_km_per_unit?.toFixed(2) || 'N/A'} km/{selectedVehicle?.fuel_type === 'EV' ? 'kWh' : 'L'}
+                    Default from vehicle: {selectedVehicle?.mileage_km_per_unit?.toFixed(2) || 'N/A'} km/{getFuelUnit(selectedVehicle?.fuel_type)}
                   </p>
                 </div>
 
@@ -1252,7 +1260,7 @@ export default function CostSheetForm() {
                   </p>
                   <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
                     Fuel Type: {selectedVehicle.fuel_type} |
-                    Default Mileage: {selectedVehicle.mileage_km_per_unit} km/{selectedVehicle.fuel_type === 'EV' ? 'kWh' : 'L'} |
+                    Default Mileage: {selectedVehicle.mileage_km_per_unit} km/{getFuelUnit(selectedVehicle.fuel_type)} |
                     Default Maintenance: {formatCurrency(selectedVehicle.maintenance_cost_per_km)}/km
                   </p>
                 </div>
@@ -1299,7 +1307,7 @@ export default function CostSheetForm() {
                   </div>
                   {selectedVehicle && formData.city && (
                     <p className="text-xs text-muted-foreground">
-                      {formData.monthly_km.toFixed(0)} km ÷ {formData.mileage_per_liter || selectedVehicle.mileage_km_per_unit} km/{selectedVehicle.fuel_type === 'EV' ? 'kWh' : 'L'} @ {formatCurrency(fuelRate)}/{selectedVehicle.fuel_type === 'EV' ? 'kWh' : 'L'} in {formData.city}
+                      {formData.monthly_km.toFixed(0)} km ÷ {formData.mileage_per_liter || selectedVehicle.mileage_km_per_unit} km/{getFuelUnit(selectedVehicle.fuel_type)} @ {formatCurrency(fuelRate)}/{getFuelUnit(selectedVehicle.fuel_type)} in {formData.city}
                     </p>
                   )}
                 </div>
@@ -1512,7 +1520,7 @@ export default function CostSheetForm() {
               <Label>Fuel Type *</Label>
               <Select
                 value={quickAddForm.fuel_type}
-                onValueChange={(v) => setQuickAddForm(prev => ({ ...prev, fuel_type: v as 'PETROL' | 'DIESEL' | 'EV' }))}
+                onValueChange={(v) => setQuickAddForm(prev => ({ ...prev, fuel_type: v as 'PETROL' | 'DIESEL' | 'EV' | 'CNG' }))}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -1520,7 +1528,8 @@ export default function CostSheetForm() {
                 <SelectContent>
                   <SelectItem value="PETROL">Petrol</SelectItem>
                   <SelectItem value="DIESEL">Diesel</SelectItem>
-                  <SelectItem value="EV">EV</SelectItem>
+                  <SelectItem value="EV">Electric (EV)</SelectItem>
+                  <SelectItem value="CNG">CNG</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1540,7 +1549,7 @@ export default function CostSheetForm() {
             {/* Mileage & Maintenance */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>Mileage * (km/{quickAddForm.fuel_type === 'EV' ? 'kWh' : 'L'})</Label>
+                <Label>Mileage * (km/{getFuelUnit(quickAddForm.fuel_type)})</Label>
                 <Input
                   type="number"
                   step="0.1"

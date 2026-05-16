@@ -70,7 +70,15 @@ const getFuelTypeBadgeText = (vehicle: Vehicle): string => {
   return vehicle.fuel_type;
 };
 
-const FUEL_TYPES: FuelType[] = ['PETROL', 'DIESEL', 'EV'];
+const FUEL_TYPES: FuelType[] = ['PETROL', 'DIESEL', 'EV', 'CNG'];
+
+const FUEL_UNIT_LABEL: Record<string, string> = {
+  PETROL: 'L',
+  DIESEL: 'L',
+  EV: 'kWh',
+  CNG: 'Kg',
+};
+const getFuelUnit = (fuelType?: string) => FUEL_UNIT_LABEL[fuelType ?? ''] ?? 'L';
 const ITEMS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
 
 type SortField = 'brand_name' | 'model_name' | 'mileage_km_per_unit' | 'maintenance_cost_per_km';
@@ -105,6 +113,7 @@ export default function Vehicles() {
       { fuel_type: 'PETROL' as FuelType, is_hybrid: false, variant_name: '', mileage_km_per_unit: '', maintenance_cost_per_km: '', enabled: true },
       { fuel_type: 'DIESEL' as FuelType, is_hybrid: false, variant_name: '', mileage_km_per_unit: '', maintenance_cost_per_km: '', enabled: false },
       { fuel_type: 'EV' as FuelType, is_hybrid: false, variant_name: '', mileage_km_per_unit: '', maintenance_cost_per_km: '', enabled: false },
+      { fuel_type: 'CNG' as FuelType, is_hybrid: false, variant_name: '', mileage_km_per_unit: '', maintenance_cost_per_km: '', enabled: false },
     ] as VariantFormData[],
   });
 
@@ -201,6 +210,7 @@ export default function Vehicles() {
         { fuel_type: 'PETROL', is_hybrid: false, variant_name: '', mileage_km_per_unit: '', maintenance_cost_per_km: '', enabled: true },
         { fuel_type: 'DIESEL', is_hybrid: false, variant_name: '', mileage_km_per_unit: '', maintenance_cost_per_km: '', enabled: false },
         { fuel_type: 'EV', is_hybrid: false, variant_name: '', mileage_km_per_unit: '', maintenance_cost_per_km: '', enabled: false },
+        { fuel_type: 'CNG', is_hybrid: false, variant_name: '', mileage_km_per_unit: '', maintenance_cost_per_km: '', enabled: false },
       ],
     });
     setEditingVehicle(null);
@@ -805,7 +815,7 @@ export default function Vehicles() {
                             id={`variant-name-${index}`}
                             value={variant.variant_name}
                             onChange={(e) => updateVariantField(index, 'variant_name', e.target.value)}
-                            placeholder={`e.g., ${variant.fuel_type === 'EV' ? 'Long Range AWD' : 'GX 2.4'}`}
+                            placeholder={`e.g., ${variant.fuel_type === 'EV' ? 'Long Range AWD' : variant.fuel_type === 'CNG' ? 'CNG S-CNG' : 'GX 2.4'}`}
                             required={variant.enabled}
                             disabled={!variant.enabled && !editingVehicle}
                             aria-label={`Variant name for ${variant.fuel_type}`}
@@ -816,7 +826,7 @@ export default function Vehicles() {
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-2">
                             <Label htmlFor={`mileage-${index}`}>
-                              Mileage * (km/{variant.fuel_type === 'EV' ? 'kWh' : 'L'})
+                              Mileage * (km/{getFuelUnit(variant.fuel_type)})
                             </Label>
                             <Input
                               id={`mileage-${index}`}
@@ -1163,7 +1173,7 @@ export default function Vehicles() {
                           <Badge variant="outline">{getFuelTypeBadgeText(vehicle)}</Badge>
                         </TableCell>
                         <TableCell>
-                          {vehicle.mileage_km_per_unit} km/{vehicle.fuel_type === 'EV' ? 'kWh' : 'L'}
+                          {vehicle.mileage_km_per_unit} km/{getFuelUnit(vehicle.fuel_type)}
                         </TableCell>
                         <TableCell>{formatCurrency(vehicle.maintenance_cost_per_km)}/km</TableCell>
                         <TableCell>
@@ -1289,7 +1299,7 @@ export default function Vehicles() {
                         <div>
                           <span className="text-muted-foreground block mb-1">Mileage</span>
                           <span className="font-medium">
-                            {vehicle.mileage_km_per_unit} km/{vehicle.fuel_type === 'EV' ? 'kWh' : 'L'}
+                            {vehicle.mileage_km_per_unit} km/{getFuelUnit(vehicle.fuel_type)}
                           </span>
                         </div>
                         <div>
