@@ -37,7 +37,7 @@ import { PlusCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/supabase/client';
 import { calculateCostSheet, formatCurrency } from '@/lib/calculations';
-import type { CostSheet, CostSheetFormData, Vehicle, CostSheetStatus } from '@/types';
+import type { CostSheet, CostSheetFormData, Vehicle, CostSheetStatus, BookingType } from '@/types';
 import { ArrowLeft, Save, Send, Calculator, Lock, Cloud, HardDrive, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
@@ -80,6 +80,7 @@ export default function CostSheetForm() {
     company_name: '',
     vehicle_id: '',
     city: '',
+    booking_type: 'CHAUFFEUR_DRIVEN',
     tenure_years: 3,
     ex_showroom_price: 0,
     discount: 0,
@@ -246,6 +247,7 @@ export default function CostSheetForm() {
         company_name: formDataRef.current.company_name.trim(),
         vehicle_id: formDataRef.current.vehicle_id,
         city: formDataRef.current.city,
+        booking_type: formDataRef.current.booking_type,
         tenure_years: formDataRef.current.tenure_years,
         tenure_months: safeCalculations.tenure_months,
         ex_showroom_price: formDataRef.current.ex_showroom_price || 0,
@@ -361,10 +363,12 @@ export default function CostSheetForm() {
     const selectedVehicle = vehicles.find(v => v.id === formDataRef.current.vehicle_id);
     const mileage = formDataRef.current.mileage_per_liter || selectedVehicle?.mileage_km_per_unit || 25;
     const monthly_km = formDataRef.current.monthly_km || 0;
-    const fuel_cost = mileage > 0 ? (monthly_km / mileage) * fuelRate : 0;
+    const isFuelDisabledRef = formDataRef.current.booking_type === 'SELF_DRIVE_WITH_CHAUFFEUR' || formDataRef.current.booking_type === 'SELF_DRIVE_WITHOUT_CHAUFFEUR';
+    const isDriverDisabledRef = formDataRef.current.booking_type === 'SELF_DRIVE_WITHOUT_CHAUFFEUR';
+    const fuel_cost = (!isFuelDisabledRef && mileage > 0) ? (monthly_km / mileage) * fuelRate : 0;
     const maintenance_cost_per_km = formDataRef.current.maintenance_cost_per_km || selectedVehicle?.maintenance_cost_per_km || 0;
     const maintenance_cost = monthly_km * maintenance_cost_per_km;
-    const total_driver_cost = (formDataRef.current.drivers_count || 0) * (formDataRef.current.driver_salary_per_driver || 0);
+    const total_driver_cost = isDriverDisabledRef ? 0 : (formDataRef.current.drivers_count || 0) * (formDataRef.current.driver_salary_per_driver || 0);
     const subtotal_b = fuel_cost + total_driver_cost + maintenance_cost + (formDataRef.current.parking_charges || 0) + (formDataRef.current.supervisor_cost || 0) + (formDataRef.current.gps_camera_cost || 0) + (formDataRef.current.permit_cost || 0);
     const admin_charge_amount = (subtotal_a + subtotal_b) * (adminChargePercent / 100);
     const grand_total = subtotal_a + subtotal_b + admin_charge_amount;
@@ -544,6 +548,7 @@ export default function CostSheetForm() {
           company_name: data.company_name || '',
           vehicle_id: data.vehicle_id || '',
           city: data.city || '',
+          booking_type: data.booking_type || 'CHAUFFEUR_DRIVEN',
           tenure_years: data.tenure_years || 3,
           ex_showroom_price: data.ex_showroom_price || 0,
           discount: data.discount || 0,
@@ -604,10 +609,12 @@ export default function CostSheetForm() {
     const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id);
     const mileage = formData.mileage_per_liter || selectedVehicle?.mileage_km_per_unit || 25;
     const monthly_km = formData.monthly_km || 0;
-    const fuel_cost = mileage > 0 ? (monthly_km / mileage) * fuelRate : 0;
+    const isFuelDisabled = formData.booking_type === 'SELF_DRIVE_WITH_CHAUFFEUR' || formData.booking_type === 'SELF_DRIVE_WITHOUT_CHAUFFEUR';
+    const isDriverDisabled = formData.booking_type === 'SELF_DRIVE_WITHOUT_CHAUFFEUR';
+    const fuel_cost = (!isFuelDisabled && mileage > 0) ? (monthly_km / mileage) * fuelRate : 0;
     const maintenance_cost_per_km = formData.maintenance_cost_per_km || selectedVehicle?.maintenance_cost_per_km || 0;
     const maintenance_cost = monthly_km * maintenance_cost_per_km;
-    const total_driver_cost = (formData.drivers_count || 0) * (formData.driver_salary_per_driver || 0);
+    const total_driver_cost = isDriverDisabled ? 0 : (formData.drivers_count || 0) * (formData.driver_salary_per_driver || 0);
     const subtotal_b = fuel_cost + total_driver_cost + maintenance_cost + (formData.parking_charges || 0) + (formData.supervisor_cost || 0) + (formData.gps_camera_cost || 0) + (formData.permit_cost || 0);
     const admin_charge_amount = (subtotal_a + subtotal_b) * (adminChargePercent / 100);
     const grand_total = subtotal_a + subtotal_b + admin_charge_amount;
@@ -632,6 +639,13 @@ export default function CostSheetForm() {
     };
   }, [formData, vehicles, interestRate, adminChargePercent, insuranceRate, fuelRate]);
   const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id);
+
+  // Booking type helpers
+  const isChauffeurDriven = formData.booking_type === 'CHAUFFEUR_DRIVEN';
+  const isSelfDriveWithChauffeur = formData.booking_type === 'SELF_DRIVE_WITH_CHAUFFEUR';
+  const isSelfDriveWithoutChauffeur = formData.booking_type === 'SELF_DRIVE_WITHOUT_CHAUFFEUR';
+  const fuelDisabled = isSelfDriveWithChauffeur || isSelfDriveWithoutChauffeur;
+  const driverDisabled = isSelfDriveWithoutChauffeur;
 
   const updateField = (field: keyof CostSheetFormData, value: string | number) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -672,6 +686,7 @@ export default function CostSheetForm() {
         company_name: formData.company_name.trim(),
         vehicle_id: formData.vehicle_id,
         city: formData.city,
+        booking_type: formData.booking_type,
         tenure_years: formData.tenure_years,
         tenure_months: calculations.tenure_months,
         ex_showroom_price: formData.ex_showroom_price,
@@ -974,6 +989,28 @@ export default function CostSheetForm() {
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="booking_type">Booking Type *</Label>
+              <Select
+                value={formData.booking_type}
+                onValueChange={(v) => updateField('booking_type', v as BookingType)}
+              >
+                <SelectTrigger id="booking_type">
+                  <SelectValue placeholder="Select booking type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CHAUFFEUR_DRIVEN">Chauffeur Driven</SelectItem>
+                  <SelectItem value="SELF_DRIVE_WITH_CHAUFFEUR">Self Drive with Chauffeur</SelectItem>
+                  <SelectItem value="SELF_DRIVE_WITHOUT_CHAUFFEUR">Self Drive without Chauffeur</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {isChauffeurDriven && 'Full cost sheet — fuel & driver costs included'}
+                {isSelfDriveWithChauffeur && 'Fuel cost excluded; driver cost included'}
+                {isSelfDriveWithoutChauffeur && 'Fuel & driver costs excluded'}
+              </p>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="vehicle">Vehicle *</Label>
               <Select value={formData.vehicle_id} onValueChange={(v) => updateField('vehicle_id', v)}>
                 <SelectTrigger>
@@ -1271,7 +1308,14 @@ export default function CostSheetForm() {
 
             {/* Usage & Fuel */}
             <div>
-              <h4 className="font-medium mb-3 text-muted-foreground">Usage & Fuel</h4>
+              <h4 className="font-medium mb-3 text-muted-foreground flex items-center gap-2">
+                Usage & Fuel
+                {fuelDisabled && (
+                  <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-normal">
+                    Fuel excluded ({formData.booking_type === 'SELF_DRIVE_WITH_CHAUFFEUR' ? 'Self Drive with Chauffeur' : 'Self Drive without Chauffeur'})
+                  </span>
+                )}
+              </h4>
               <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
                 <div className="space-y-2">
                   <Label htmlFor="monthly_km">Monthly KM *</Label>
@@ -1302,13 +1346,16 @@ export default function CostSheetForm() {
                     Monthly Fuel Cost
                     <Lock className="w-3 h-3 text-muted-foreground" />
                   </Label>
-                  <div className="p-3 bg-muted rounded-lg font-medium">
-                    {formatCurrency(calculations.fuel_cost)}
+                  <div className={`p-3 rounded-lg font-medium ${fuelDisabled ? 'bg-amber-50 text-amber-400 line-through' : 'bg-muted'}`}>
+                    {fuelDisabled ? '₹0 (disabled)' : formatCurrency(calculations.fuel_cost)}
                   </div>
-                  {selectedVehicle && formData.city && (
+                  {!fuelDisabled && selectedVehicle && formData.city && (
                     <p className="text-xs text-muted-foreground">
                       {formData.monthly_km.toFixed(0)} km ÷ {formData.mileage_per_liter || selectedVehicle.mileage_km_per_unit} km/{getFuelUnit(selectedVehicle.fuel_type)} @ {formatCurrency(fuelRate)}/{getFuelUnit(selectedVehicle.fuel_type)} in {formData.city}
                     </p>
+                  )}
+                  {fuelDisabled && (
+                    <p className="text-xs text-amber-600">Fuel cost not included for this booking type</p>
                   )}
                 </div>
               </div>
@@ -1318,7 +1365,14 @@ export default function CostSheetForm() {
 
             {/* Driver Costs */}
             <div>
-              <h4 className="font-medium mb-3 text-muted-foreground">Driver Costs</h4>
+              <h4 className="font-medium mb-3 text-muted-foreground flex items-center gap-2">
+                Driver Costs
+                {driverDisabled && (
+                  <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-normal">
+                    Excluded (Self Drive without Chauffeur)
+                  </span>
+                )}
+              </h4>
               <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
                 <div className="space-y-2">
                   <Label htmlFor="drivers">Number of Drivers</Label>
@@ -1329,6 +1383,8 @@ export default function CostSheetForm() {
                     value={formData.drivers_count || ''}
                     onChange={(e) => updateField('drivers_count', parseInt(e.target.value) || 0)}
                     placeholder="1"
+                    disabled={driverDisabled}
+                    className={driverDisabled ? 'opacity-40 cursor-not-allowed' : ''}
                   />
                 </div>
                 <div className="space-y-2">
@@ -1340,6 +1396,8 @@ export default function CostSheetForm() {
                     value={formData.driver_salary_per_driver || ''}
                     onChange={(e) => updateField('driver_salary_per_driver', parseFloat(e.target.value) || 0)}
                     placeholder="15000"
+                    disabled={driverDisabled}
+                    className={driverDisabled ? 'opacity-40 cursor-not-allowed' : ''}
                   />
                 </div>
                 <div className="space-y-2">
@@ -1347,9 +1405,12 @@ export default function CostSheetForm() {
                     Total Driver Cost
                     <Calculator className="w-3 h-3 text-muted-foreground" />
                   </Label>
-                  <div className="p-3 bg-muted rounded-lg font-medium">
-                    {formatCurrency(calculations.total_driver_cost)}
+                  <div className={`p-3 rounded-lg font-medium ${driverDisabled ? 'bg-amber-50 text-amber-400 line-through' : 'bg-muted'}`}>
+                    {driverDisabled ? '₹0 (disabled)' : formatCurrency(calculations.total_driver_cost)}
                   </div>
+                  {driverDisabled && (
+                    <p className="text-xs text-amber-600">Driver cost not included for this booking type</p>
+                  )}
                 </div>
               </div>
             </div>

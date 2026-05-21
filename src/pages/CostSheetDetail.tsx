@@ -367,6 +367,23 @@ export default function CostSheetDetail() {
         </Card>
       </div>
 
+      {/* Booking Type Badge */}
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-muted-foreground">Booking Type:</span>
+        {costSheet.booking_type === 'CHAUFFEUR_DRIVEN' && (
+          <Badge variant="outline" className="border-blue-300 text-blue-700 bg-blue-50">🚗 Chauffeur Driven</Badge>
+        )}
+        {costSheet.booking_type === 'SELF_DRIVE_WITH_CHAUFFEUR' && (
+          <Badge variant="outline" className="border-amber-300 text-amber-700 bg-amber-50">🧑‍✈️ Self Drive with Chauffeur</Badge>
+        )}
+        {costSheet.booking_type === 'SELF_DRIVE_WITHOUT_CHAUFFEUR' && (
+          <Badge variant="outline" className="border-purple-300 text-purple-700 bg-purple-50">🔑 Self Drive without Chauffeur</Badge>
+        )}
+        {!costSheet.booking_type && (
+          <Badge variant="outline">🚗 Chauffeur Driven</Badge>
+        )}
+      </div>
+
 
       {/* Section 1 - Vehicle Cost & Down Payment */}
       <Card>

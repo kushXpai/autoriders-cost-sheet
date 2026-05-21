@@ -18,6 +18,12 @@ export interface User {
 // Vehicle Types
 export type FuelType = 'PETROL' | 'DIESEL' | 'EV' | 'CNG';
 
+// Booking Type
+export type BookingType =
+  | 'CHAUFFEUR_DRIVEN'
+  | 'SELF_DRIVE_WITH_CHAUFFEUR'
+  | 'SELF_DRIVE_WITHOUT_CHAUFFEUR';
+
 export interface Vehicle {
   id: string;
   brand_name: string;
@@ -101,6 +107,7 @@ export interface CostSheet {
   company_name: string;
   vehicle_id: string;
   city: string;
+  booking_type: BookingType;
 
   tenure_years: number;
   tenure_months: number;
@@ -163,6 +170,7 @@ export interface CostSheetFormData {
   company_name: string;
   vehicle_id: string;
   city: string;
+  booking_type: BookingType;
 
   tenure_years: number;
 
