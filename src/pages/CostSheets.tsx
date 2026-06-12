@@ -55,7 +55,17 @@ export default function CostSheets() {
         .select('*');
 
       if (!isAdmin) {
-        query = query.eq('created_by', user?.id);
+        // Fetch all users who report to the current user (i.e. their subordinates)
+        const { data: subordinates } = await supabase
+          .from('users')
+          .select('id')
+          .eq('reports_to', user?.id);
+
+        const subordinateIds = (subordinates || []).map((u) => u.id);
+        // Include the current user's own sheets + all subordinates' sheets
+        const visibleIds = [user?.id, ...subordinateIds].filter(Boolean) as string[];
+
+        query = query.in('created_by', visibleIds);
       }
 
       const { data: sheetsData, error: sheetsError } = await query
