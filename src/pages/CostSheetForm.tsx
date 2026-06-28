@@ -86,12 +86,12 @@ export default function CostSheetForm() {
     discount: 0,
     down_payment_percent: 0,
     registration_charges: 0,
-    monthly_km: 3000,
-    daily_hours: 8,
+    monthly_km: 0,
+    daily_hours: 0,
     mileage_per_liter: 0,
     maintenance_cost_per_km: 0,
     drivers_count: 1,
-    driver_salary_per_driver: 15000,
+    driver_salary_per_driver: 25000,
     parking_charges: 0,
     maintenance_cost: 0,
     supervisor_cost: 0,
@@ -554,12 +554,12 @@ export default function CostSheetForm() {
           discount: data.discount || 0,
           down_payment_percent: downPaymentPercent,
           registration_charges: data.registration_charges || 0,
-          monthly_km: data.monthly_km || 3000,
-          daily_hours: data.daily_hours || 8,
+          monthly_km: data.monthly_km || 0,
+          daily_hours: data.daily_hours || 0,
           mileage_per_liter: data.mileage_per_liter || 0,
           maintenance_cost_per_km: data.maintenance_cost_per_km || 0,
           drivers_count: data.drivers_count || 1,
-          driver_salary_per_driver: data.driver_salary_per_driver || 15000,
+          driver_salary_per_driver: data.driver_salary_per_driver || 25000,
           parking_charges: data.parking_charges || 0,
           maintenance_cost: data.maintenance_cost || 0,
           supervisor_cost: data.supervisor_cost || 0,
@@ -1061,21 +1061,23 @@ export default function CostSheetForm() {
               />
               {errors.ex_showroom_price && <p className="text-sm text-destructive">{errors.ex_showroom_price}</p>}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="discount">Discount Amount (₹)</Label>
-              <Input
-                id="discount"
-                type="number"
-                min="0"
-                value={formData.discount || ''}
-                onChange={(e) => updateField('discount', parseFloat(e.target.value) || 0)}
-                placeholder="0"
-              />
-              {errors.discount && <p className="text-sm text-destructive">{errors.discount}</p>}
-              <p className="text-xs text-muted-foreground">
-                Discount applied to ex-showroom price
-              </p>
-            </div>
+            {isAdmin && (
+              <div className="space-y-2">
+                <Label htmlFor="discount">Discount Amount (₹)</Label>
+                <Input
+                  id="discount"
+                  type="number"
+                  min="0"
+                  value={formData.discount || ''}
+                  onChange={(e) => updateField('discount', parseFloat(e.target.value) || 0)}
+                  placeholder="0"
+                />
+                {errors.discount && <p className="text-sm text-destructive">{errors.discount}</p>}
+                <p className="text-xs text-muted-foreground">
+                  Discount applied to ex-showroom price
+                </p>
+              </div>
+            )}
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
                 Discounted Price
@@ -1325,7 +1327,7 @@ export default function CostSheetForm() {
                     min="1"
                     value={formData.monthly_km || ''}
                     onChange={(e) => updateField('monthly_km', parseFloat(e.target.value) || 0)}
-                    placeholder="3000"
+                    placeholder="0"
                   />
                   {errors.monthly_km && <p className="text-xs text-destructive">{errors.monthly_km}</p>}
                 </div>
@@ -1395,7 +1397,7 @@ export default function CostSheetForm() {
                     min="0"
                     value={formData.driver_salary_per_driver || ''}
                     onChange={(e) => updateField('driver_salary_per_driver', parseFloat(e.target.value) || 0)}
-                    placeholder="15000"
+                    placeholder="25000"
                     disabled={driverDisabled}
                     className={driverDisabled ? 'opacity-40 cursor-not-allowed' : ''}
                   />
